@@ -1,190 +1,1449 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { getGameSummary, type GameSummary } from '../../services/game'
+import { computed, ref } from 'vue'
 import { getPlatform } from '../../platform'
 
-const loading = ref(true)
-const summary = ref<GameSummary>()
+type Screen = 'splash' | 'menu' | 'server' | 'characters' | 'create' | 'game'
+type ProfessionKey = 'warrior' | 'scholar' | 'stranger'
+type GameTab = 'move' | 'person' | 'facility' | 'function'
+
+interface ServerItem {
+  name: string
+  status: 'online' | 'soon'
+  population: string
+  terrain: string
+  serverType: string
+}
+
+interface Portrait {
+  name: string
+  symbol: string
+  style: string
+}
+
+interface Profession {
+  key: ProfessionKey
+  name: string
+  description: string
+  portraits: Portrait[]
+}
+
+const screen = ref<Screen>('splash')
+const selectedServer = ref(0)
+const currentServerPage = ref(1)
+const selectedProfession = ref<ProfessionKey>('warrior')
+const selectedPortrait = ref(2)
+const activeGameTab = ref<GameTab>('move')
+const pageSize = 4
 const platform = getPlatform()
+const gameTabs: { key: GameTab; label: string }[] = [
+  { key: 'person', label: '人物' },
+  { key: 'facility', label: '设施' },
+  { key: 'move', label: '移动' },
+  { key: 'function', label: '功能' },
+]
 
-onMounted(async () => {
-  try {
-    summary.value = await getGameSummary()
-  } finally {
-    loading.value = false
-  }
+const servers: ServerItem[] = [
+  { name: '官渡', serverType: '神将服', status: 'online', population: '人气火爆', terrain: '沃野千里' },
+  { name: '邺城', serverType: '国士服', status: 'online', population: '稳定运行', terrain: '水乡平原' },
+  { name: '江陵', serverType: '猛将服', status: 'online', population: '稳定运行', terrain: '江汉沃土' },
+  { name: '襄阳', serverType: '测试服', status: 'online', population: '测试中', terrain: '山河险固' },
+]
+
+const professions: Profession[] = [
+  {
+    key: 'warrior',
+    name: '武士',
+    description: '横行于乱世的强者，拥有精湛的战斗技巧，善于在肉搏战中重创对手。',
+    portraits: [
+      { name: '女将', symbol: '女', style: 'female-red' },
+      { name: '红妆', symbol: '妆', style: 'female-rose' },
+      { name: '玄甲', symbol: '将', style: 'male-gold' },
+      { name: '猛将', symbol: '猛', style: 'male-red' },
+      { name: '战神', symbol: '战', style: 'male-blue' },
+      { name: '铁骑', symbol: '骑', style: 'male-purple' },
+    ],
+  },
+  {
+    key: 'scholar',
+    name: '文人',
+    description: '虽然身体孱弱，但拥有超高的智力。善于用计陷对手于混乱，大大削弱对手实力。',
+    portraits: [
+      { name: '琴姬', symbol: '琴', style: 'female-rose' },
+      { name: '书生', symbol: '书', style: 'female-teal' },
+      { name: '谋士', symbol: '谋', style: 'female-purple' },
+      { name: '策士', symbol: '策', style: 'male-brown' },
+      { name: '羽扇', symbol: '扇', style: 'male-blue' },
+      { name: '公子', symbol: '公', style: 'male-gold' },
+    ],
+  },
+  {
+    key: 'stranger',
+    name: '异人',
+    description: '云游四方的求道者，拥有强大的法力，善于群体攻击，可以呼风唤雨，蛊毒引雷。',
+    portraits: [
+      { name: '灵女', symbol: '灵', style: 'female-gold' },
+      { name: '巫祝', symbol: '巫', style: 'female-rose' },
+      { name: '仙子', symbol: '仙', style: 'female-teal' },
+      { name: '狂士', symbol: '狂', style: 'male-red' },
+      { name: '道长', symbol: '道', style: 'male-blue' },
+      { name: '羽客', symbol: '羽', style: 'male-purple' },
+    ],
+  },
+]
+
+const totalServerPages = computed(() => Math.ceil(servers.length / pageSize))
+const visibleServers = computed(() => {
+  const start = (currentServerPage.value - 1) * pageSize
+  return servers.slice(start, start + pageSize)
 })
+const activeProfession = computed(() => professions.find((item) => item.key === selectedProfession.value) ?? professions[0])
+const selectedPortraitData = computed(() => activeProfession.value.portraits[selectedPortrait.value])
 
-function startGame() {
-  uni.showToast({
-    title: '主城正在准备中',
-    icon: 'none',
-  })
+function goTo(nextScreen: Screen) {
+  screen.value = nextScreen
+}
+
+function chooseServer(index: number) {
+  const actualIndex = (currentServerPage.value - 1) * pageSize + index
+  const server = servers[actualIndex]
+  if (!server || server.status === 'soon') {
+    uni.showToast({ title: '该分区即将开放', icon: 'none' })
+    return
+  }
+  selectedServer.value = actualIndex
+}
+
+function changeServerPage(step: number) {
+  const nextPage = currentServerPage.value + step
+  if (nextPage >= 1 && nextPage <= totalServerPages.value) currentServerPage.value = nextPage
+}
+
+function enterServer() {
+  if (servers[selectedServer.value].status === 'soon') {
+    uni.showToast({ title: '请选择已开放分区', icon: 'none' })
+    return
+  }
+  goTo('characters')
+}
+
+function openCreateCharacter() {
+  selectedProfession.value = 'warrior'
+  selectedPortrait.value = 2
+  goTo('create')
+}
+
+function chooseProfession(key: ProfessionKey) {
+  selectedProfession.value = key
+  selectedPortrait.value = 2
+}
+
+function choosePortrait(index: number) {
+  selectedPortrait.value = index
+}
+
+function enterExistingCharacter() {
+  openGame()
+}
+
+function registerCharacter() {
+  openGame()
+}
+
+function openGame() {
+  activeGameTab.value = 'move'
+  goTo('game')
+}
+
+function selectGameTab(tab: GameTab) {
+  activeGameTab.value = tab
+}
+
+function exitGame() {
+  // #ifdef APP-PLUS
+  const appRuntime = (globalThis as typeof globalThis & {
+    plus?: { runtime?: { quit?: () => void } }
+  }).plus?.runtime
+  appRuntime?.quit?.()
+  // #endif
+  // #ifndef APP-PLUS
+  uni.showToast({ title: '当前平台不支持直接退出', icon: 'none' })
+  // #endif
 }
 </script>
 
 <template>
-  <view class="page-shell">
-    <view class="hero-card">
-      <view class="eyebrow">LORDS OF HANLAND</view>
-      <view class="title">汉土领主</view>
-      <view class="subtitle">在乱世之中，经营你的城池，结盟或征服四方。</view>
+  <view class="game-root">
+    <view v-if="screen === 'splash'" class="screen splash-screen" @tap="goTo('menu')">
+      <view class="splash-art">
+        <view class="sun-glow"></view><view class="mountain mountain-back"></view><view class="mountain mountain-front"></view>
+        <view class="warrior"><view class="warrior-hair"></view><view class="warrior-face"></view><view class="warrior-armor"></view><view class="warrior-ribbon"></view></view>
+        <view class="title-seal"><text>汉</text><text>土</text><text>领</text><text>主</text></view>
+        <view class="online-mark">ONLINE</view><view class="free-mark">永久免费</view>
+      </view>
+      <view class="tap-hint"><view class="tap-hint-line"></view><text>点击进入</text><view class="tap-hint-line"></view></view>
+    </view>
 
-      <view class="hero-actions">
-        <button class="primary-button" @click="startGame">进入主城</button>
-        <view class="platform-badge">{{ platform }}</view>
+    <view v-else-if="screen === 'menu'" class="screen splash-screen menu-screen">
+      <view class="splash-art">
+        <view class="sun-glow"></view><view class="mountain mountain-back"></view><view class="mountain mountain-front"></view>
+        <view class="warrior"><view class="warrior-hair"></view><view class="warrior-face"></view><view class="warrior-armor"></view><view class="warrior-ribbon"></view></view>
+        <view class="title-seal"><text>汉</text><text>土</text><text>领</text><text>主</text></view>
+        <view class="online-mark">ONLINE</view><view class="free-mark">永久免费</view>
+      </view>
+      <view class="menu-panel">
+        <view class="menu-item enter-item" @tap="goTo('server')"><text class="menu-arrow">➤</text><text>进入游戏</text></view>
+        <view class="menu-item exit-item" @tap="exitGame">退出</view>
       </view>
     </view>
 
-    <view class="section-title">领地概览</view>
-    <view v-if="loading" class="loading-card">正在读取领地信息…</view>
-    <view v-else class="stats-grid">
-      <view class="stat-card">
-        <view class="stat-value">{{ summary?.season }}</view>
-        <view class="stat-label">当前纪年</view>
+    <view v-else-if="screen === 'server'" class="screen select-screen">
+      <view class="select-header"><view class="ornament ornament-left"></view><text>选择分区</text><view class="ornament ornament-right"></view></view>
+      <view class="server-list">
+        <view v-for="(server, index) in visibleServers" :key="server.name" class="server-item" :class="{ selected: selectedServer === (currentServerPage - 1) * pageSize + index, disabled: server.status === 'soon' }" @tap="chooseServer(index)">
+          <view class="server-name">{{ server.name }}（{{ server.serverType }}）</view>
+          <view class="server-meta"><text>{{ server.terrain }}</text><text>{{ server.population }}</text></view>
+          <view class="server-light" :class="server.status"></view>
+        </view>
       </view>
-      <view class="stat-card">
-        <view class="stat-value">{{ summary?.territoryCount }}</view>
-        <view class="stat-label">控制领地</view>
+      <view class="page-switcher">
+        <button class="page-button" :disabled="currentServerPage === 1" @tap="changeServerPage(-1)">▲</button>
+        <text>第 {{ currentServerPage }} / {{ totalServerPages }} 页</text>
+        <button class="page-button" :disabled="currentServerPage === totalServerPages" @tap="changeServerPage(1)">▼</button>
       </view>
-      <view class="stat-card">
-        <view class="stat-value">{{ summary?.resourceCount }}</view>
-        <view class="stat-label">库存资源</view>
-      </view>
+      <view class="notice-copy"><text>游戏永久免费，游戏内道具自愿购买</text><text>文网游备字（2012）M-RPG002号</text></view>
+      <view class="select-footer"><button class="back-button" @tap="goTo('menu')">返回</button><button class="enter-button" @tap="enterServer">进入游戏</button></view>
     </view>
 
-    <view class="notice-card">
-      <view class="notice-title">跨端基座已就绪</view>
-      <view class="notice-text">接下来可以接入登录、地图、战斗和实时通信模块。</view>
+    <view v-else-if="screen === 'characters'" class="screen character-screen">
+      <view class="character-header"><view class="header-ornament"></view><text>选择角色</text><view class="header-ornament"></view></view>
+      <view class="character-slots">
+        <view class="character-slot occupied">
+          <view class="slot-portrait portrait-occupied"><text>哈</text></view>
+          <view class="slot-info"><view class="slot-name">哈基米</view><view class="slot-level">21级武士</view><view class="slot-id">ID:10081</view></view>
+        </view>
+        <view v-for="slot in 2" :key="slot" class="character-slot empty" @tap="openCreateCharacter">
+          <view class="slot-portrait portrait-empty">?</view>
+          <view class="empty-info"><view class="empty-name">空</view><button class="new-character-button" @tap.stop="openCreateCharacter">新建角色</button></view>
+        </view>
+      </view>
+      <view class="current-server">&lt; {{ servers[selectedServer].name }}（{{ servers[selectedServer].serverType }}） &gt;</view>
+      <view class="character-footer"><button class="enter-character-button" @tap="enterExistingCharacter">进入游戏</button><button class="character-back-button" @tap="goTo('server')">返回</button></view>
+    </view>
+
+    <view v-else-if="screen === 'game'" class="screen game-screen">
+      <view class="game-topbar">
+        <view class="game-scene-preview"><view class="scene-roof"></view><view class="scene-water"></view></view>
+        <text class="game-location">许昌</text><view class="recharge-badge">首充</view>
+      </view>
+      <view class="game-workspace">
+        <view class="player-panel">
+          <view class="player-summary"><view class="player-avatar">哈</view><view class="player-name-block"><text class="player-name">哈基米</text><text class="player-server">[{{ servers[selectedServer].name }}:10081]</text></view></view>
+          <view class="status-bar hp"><view class="bar-fill"></view></view><view class="status-bar mp"><view class="bar-fill"></view></view>
+          <view class="combat-power"><text>战斗力</text><text>4202</text></view>
+          <view class="general-row"><view v-for="index in 3" :key="index" class="general-slot">将</view></view>
+          <view v-if="activeGameTab === 'move'" class="left-map-card"><view class="map-title">许昌</view><view class="map-art"><view class="map-river"></view><view class="map-marker">◆</view></view></view>
+          <view v-else class="player-detail-card"><view><text>职业:</text><text>武士</text></view><view><text>等级:</text><text>21级</text></view><view class="experience"><text>经验值:</text><view class="experience-track"><view class="experience-fill"></view></view></view><view><text>金:</text><text>0</text></view><view><text>银:</text><text>0</text></view><view><text>绑定银:</text><text>26715</text></view></view>
+        </view>
+        <view class="game-panel">
+          <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view class="move-title"><text class="down-arrow">▼</text><text>许昌郊外</text></view><view class="move-empty"></view><view class="panel-caption">移动</view></view>
+          <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="item in ['称号使者', '导航使者', '战力挑战']" :key="item" class="dialog-row"><text>{{ item }}</text><button>对话</button></view><view class="panel-caption">人物</view></view>
+          <view v-else-if="activeGameTab === 'facility'" class="panel-content facility-content"><view v-for="item in ['医馆', '钱庄', '馆驿', '市场', '广场', '官府', '战场', '梨园']" :key="item" class="facility-item"><text class="facility-icon">✦</text><text>{{ item }}</text></view><view class="panel-caption">设施</view></view>
+          <view v-else class="panel-content function-content"><view v-for="item in ['状态', '物品', '副将', '装备', '排行', '好友', '邮件', '任务', '擂台', '帮派', '训练', '宝库', '公告', '会员', '登出']" :key="item" class="function-item">{{ item }}</view><view class="panel-caption">功能</view></view>
+        </view>
+      </view>
+      <view class="game-tabs"><button v-for="tab in gameTabs" :key="tab.key" class="game-tab" :class="{ active: activeGameTab === tab.key }" @tap="selectGameTab(tab.key)">{{ tab.label }}</button></view>
+      <view class="companion-row"><view v-for="index in 7" :key="index" class="companion">{{ ['月', '花', '琴', '龙', '仙', '仙', '仙'][index - 1] }}</view><text class="more-link">更多(44)</text></view>
+      <view class="shortcut-row"><text class="shortcut-label">☷ 快捷键</text><text class="shortcut-item selected">区</text><text class="shortcut-item">派</text><text class="shortcut-item">商</text><text class="shortcut-item">世</text></view>
+      <view class="chat-list">
+        <view class="chat-message"><view class="chat-avatar warrior-mini">将</view><view><text class="chat-name">竹亭序</text><text> 嗯嗯</text></view></view>
+        <view class="chat-message"><view class="chat-avatar blue-mini">龙</view><view><text class="chat-name">龙且</text><text> 你悠着点，不要接触他</text></view></view>
+        <view class="chat-message"><view class="chat-avatar warrior-mini">将</view><view><text class="chat-name">竹亭序</text><text> 我看有人给我发有五个神猪惠高兴了一下结果名叫小月月</text></view></view>
+        <view class="chat-message"><view class="chat-avatar blue-mini">龙</view><view><text class="chat-name">龙且</text><text> 好</text></view></view>
+        <view class="chat-message"><view class="chat-avatar red-mini">又</view><view><text class="chat-name">又欠</text><text> 明天给我备好三个体 🤔</text></view></view>
+      </view>
+      <view class="chat-input"><button class="chat-plus">＋</button><button class="chat-emoji">●</button><view class="chat-field"></view><button class="send-button">发送</button></view>
+    </view>    <view v-else class="screen create-screen">
+      <view class="character-header"><view class="header-ornament"></view><text>创建角色</text><view class="header-ornament"></view></view>
+      <view class="create-title"><view class="gold-line"></view><text>选择职业</text><view class="gold-line"></view></view>
+      <view class="profession-row">
+        <view v-for="profession in professions" :key="profession.key" class="profession-diamond" :class="['profession-' + profession.key, { active: selectedProfession === profession.key }]" @tap="chooseProfession(profession.key)"><text>{{ profession.name }}</text></view>
+      </view>
+      <view class="create-title portrait-title"><view class="gold-line"></view><text>选择头像</text><view class="gold-line"></view></view>
+      <view class="portrait-grid">
+        <view v-for="(portrait, index) in activeProfession.portraits" :key="portrait.name" class="portrait-card" :class="{ selected: selectedPortrait === index }" @tap="choosePortrait(index)">
+          <view class="portrait-art" :class="portrait.style"><text>{{ portrait.symbol }}</text></view>
+          <view class="portrait-name">{{ portrait.name }}</view>
+        </view>
+      </view>
+      <view class="profession-description">{{ activeProfession.description }}</view>
+      <view class="create-footer"><button class="enter-character-button" @tap="registerCharacter">进入游戏</button><button class="character-back-button" @tap="goTo('characters')">返回</button></view>
+      <view class="platform-label">{{ platform }}</view>
     </view>
   </view>
 </template>
 
 <style scoped>
-.page-shell {
+.game-root {
+  width: 100%;
   min-height: 100vh;
-  padding: 48rpx;
-  box-sizing: border-box;
-  background: var(--color-bg);
-  color: var(--color-text);
+  overflow: hidden;
+  background: #191919;
+  color: #fff;
 }
 
-.hero-card {
-  padding: 64rpx 48rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.12);
-  border-radius: 32rpx;
-  background: linear-gradient(135deg, #1e293b, #172554 60%, #312e81);
-  box-shadow: 0 24rpx 60rpx rgba(0, 0, 0, 0.24);
+.screen {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
 }
 
-.eyebrow {
-  color: #93c5fd;
-  font-size: 22rpx;
-  letter-spacing: 4rpx;
+.splash-screen {
+  background: #191919;
 }
 
-.title {
-  margin-top: 20rpx;
-  color: #f8fafc;
-  font-size: 72rpx;
+.splash-art {
+  position: relative;
+  width: 100%;
+  height: 1180rpx;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 58% 54%, rgba(255, 241, 110, 0.95) 0 8%, rgba(255, 133, 0, 0.82) 18%, transparent 45%),
+    linear-gradient(145deg, #250000 0%, #7a1200 36%, #db3500 66%, #270000 100%);
+}
+
+.sun-glow {
+  position: absolute;
+  top: 280rpx;
+  left: 28%;
+  width: 620rpx;
+  height: 620rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffbd0 0 3%, #ffc400 18%, rgba(255, 65, 0, 0.35) 48%, transparent 70%);
+  filter: blur(14rpx);
+}
+
+.mountain {
+  position: absolute;
+  bottom: -80rpx;
+  width: 780rpx;
+  height: 680rpx;
+  border-radius: 50% 50% 0 0;
+  transform: rotate(-10deg);
+}
+
+.mountain-back {
+  left: -300rpx;
+  background: linear-gradient(145deg, #64230c, #1f0907 72%);
+  box-shadow: 220rpx -100rpx 0 #6c2b0d, 460rpx 70rpx 0 #4d1707;
+}
+
+.mountain-front {
+  right: -300rpx;
+  bottom: -180rpx;
+  height: 850rpx;
+  background: linear-gradient(160deg, #f4a400 0%, #cb3a08 32%, #560a08 75%);
+  opacity: 0.94;
+}
+
+.warrior {
+  position: absolute;
+  right: -100rpx;
+  bottom: 0;
+  width: 680rpx;
+  height: 920rpx;
+}
+
+.warrior-hair {
+  position: absolute;
+  top: 75rpx;
+  left: 70rpx;
+  width: 560rpx;
+  height: 400rpx;
+  border-radius: 52% 48% 44% 38%;
+  transform: rotate(-12deg);
+  background: linear-gradient(145deg, #ff4d70 8%, #c2083b 45%, #360005 76%);
+  box-shadow: -70rpx 100rpx 0 -14rpx #610018, 160rpx -70rpx 0 -24rpx #ff8295;
+}
+
+.warrior-face {
+  position: absolute;
+  top: 220rpx;
+  left: 210rpx;
+  width: 280rpx;
+  height: 350rpx;
+  border-radius: 48% 42% 50% 54%;
+  transform: rotate(-17deg);
+  background: radial-gradient(circle at 64% 33%, #3b0607 0 4%, transparent 5%), linear-gradient(150deg, #ffe3a0 0%, #f4a173 58%, #9f372d 100%);
+  box-shadow: 20rpx 34rpx 0 rgba(255, 201, 143, 0.28);
+}
+
+.warrior-armor {
+  position: absolute;
+  top: 540rpx;
+  left: 60rpx;
+  width: 560rpx;
+  height: 480rpx;
+  border-radius: 50% 50% 0 0;
+  transform: rotate(-9deg);
+  background: linear-gradient(145deg, #ffbb36 0 18%, #b80938 19% 56%, #6d001a 57% 75%, #f1a23e 76%);
+  box-shadow: inset 0 22rpx 0 rgba(255, 230, 150, 0.45);
+}
+
+.warrior-ribbon {
+  position: absolute;
+  top: 20rpx;
+  right: 0;
+  width: 460rpx;
+  height: 110rpx;
+  transform: rotate(19deg);
+  border-radius: 50%;
+  background: linear-gradient(90deg, #ff9bad, #de003f 54%, #64001d);
+}
+
+.title-seal {
+  position: absolute;
+  top: 72rpx;
+  left: 36rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #ffe500;
+  font-size: 92rpx;
+  font-weight: 900;
+  line-height: 0.96;
+  letter-spacing: -12rpx;
+  text-shadow: 5rpx 5rpx 0 #fa2c00, 9rpx 9rpx 0 #610000;
+  transform: rotate(-4deg);
+}
+
+.online-mark {
+  position: absolute;
+  top: 515rpx;
+  left: 48rpx;
+  color: #ffdf00;
+  font-size: 58rpx;
+  font-weight: 900;
+  letter-spacing: 2rpx;
+  text-shadow: 4rpx 4rpx 0 #fb2900;
+}
+
+.free-mark {
+  position: absolute;
+  right: 28rpx;
+  bottom: 42rpx;
+  padding: 20rpx 16rpx;
+  border: 5rpx solid #ffdf00;
+  border-radius: 50%;
+  background: #a60212;
+  color: #fff4bd;
+  font-size: 34rpx;
   font-weight: 800;
-  letter-spacing: 8rpx;
+  line-height: 1.2;
+  writing-mode: vertical-rl;
+  transform: rotate(10deg);
 }
 
-.subtitle {
-  max-width: 620rpx;
-  margin-top: 24rpx;
-  color: #cbd5e1;
-  font-size: 28rpx;
-  line-height: 1.7;
-}
-
-.hero-actions {
+.tap-hint {
+  position: absolute;
+  bottom: 110rpx;
+  left: 50%;
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  margin-top: 48rpx;
-}
-
-.primary-button {
-  margin: 0;
-  padding: 0 40rpx;
-  border-radius: 999rpx;
-  background: var(--color-accent);
-  color: #fff;
-  font-size: 28rpx;
+  gap: 18rpx;
+  transform: translateX(-50%);
+  color: #ffe86a;
+  font-size: 32rpx;
   font-weight: 700;
-}
-
-.primary-button::after {
-  border: none;
-}
-
-.platform-badge {
-  color: #bfdbfe;
-  font-size: 24rpx;
-}
-
-.section-title {
-  margin: 56rpx 0 24rpx;
-  color: #e2e8f0;
-  font-size: 34rpx;
-  font-weight: 700;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20rpx;
-}
-
-.stat-card,
-.loading-card,
-.notice-card {
-  padding: 28rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: 24rpx;
-  background: var(--color-card);
-}
-
-.stat-value {
-  overflow: hidden;
-  color: #f8fafc;
-  font-size: 30rpx;
-  font-weight: 700;
-  text-overflow: ellipsis;
+  text-shadow: 2rpx 2rpx #7c1a00;
   white-space: nowrap;
 }
 
-.stat-label,
-.loading-card,
-.notice-text {
-  margin-top: 12rpx;
-  color: var(--color-muted);
-  font-size: 24rpx;
+.tap-hint-line {
+  width: 76rpx;
+  height: 3rpx;
+  background: #ffd028;
 }
 
-.notice-card {
-  margin-top: 24rpx;
+.menu-panel {
+  position: absolute;
+  top: 940rpx;
+  left: 0;
+  width: 100%;
 }
 
-.notice-title {
-  color: #c4b5fd;
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 116rpx;
+  border-top: 4rpx solid #ffda00;
+  border-bottom: 4rpx solid #8d1200;
+  color: #171717;
+  font-size: 58rpx;
+  font-weight: 900;
+  text-shadow: 2rpx 2rpx #fff;
+}
+
+.enter-item {
+  background: linear-gradient(#ffc51b, #ff9d00);
+}
+
+.exit-item {
+  background: linear-gradient(#6b0000, #300000);
+  color: #111;
+  text-shadow: 2rpx 2rpx #a75a5a;
+}
+
+.menu-arrow {
+  margin-right: 22rpx;
+  color: #812000;
+  font-size: 52rpx;
+}
+
+.select-screen {
+  background:
+    linear-gradient(rgba(2, 10, 60, 0.92), rgba(4, 5, 60, 0.96)),
+    repeating-linear-gradient(135deg, #16302b 0 18rpx, #274a3d 18rpx 26rpx);
+}
+
+.select-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 170rpx;
+  color: #fff7dc;
+  font-size: 72rpx;
+  font-weight: 900;
+  text-shadow: 4rpx 4rpx #8c0000, -2rpx -2rpx #8c0000;
+}
+
+.ornament {
+  width: 180rpx;
+  height: 82rpx;
+  margin: 0 18rpx;
+  border-radius: 50%;
+  background: rgba(245, 245, 230, 0.7);
+  transform: skewX(28deg);
+}
+
+.server-list {
+  padding: 0 28rpx;
+}
+
+.server-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 112rpx;
+  margin-bottom: 22rpx;
+  padding: 0 42rpx;
+  border: 8rpx solid #cbd0d5;
+  border-radius: 4rpx;
+  background: linear-gradient(90deg, #17231c 0 70%, #66765d 100%);
+  box-shadow: 0 0 0 4rpx #080808, inset 0 0 0 3rpx #000;
+}
+
+.server-item.selected {
+  border-color: #fff;
+  background: linear-gradient(90deg, #314137 0 70%, #f1b34b 100%);
+}
+
+.server-item.disabled {
+  color: #a8a8a8;
+  filter: grayscale(0.8);
+}
+
+.server-name {
+  width: 210rpx;
+  font-size: 48rpx;
+  font-weight: 900;
+  text-shadow: 3rpx 3rpx #101010;
+}
+
+.server-meta {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  color: #e9e9d9;
+  font-size: 22rpx;
+}
+
+.server-light {
+  position: absolute;
+  right: 22rpx;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #40ef7c;
+  box-shadow: 0 0 12rpx #40ef7c;
+}
+
+.server-light.soon {
+  background: #9b9b9b;
+  box-shadow: none;
+}
+
+.page-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 34rpx;
+  margin-top: 30rpx;
+  color: #f4f4f4;
+  font-size: 34rpx;
+}
+
+.page-button {
+  width: 190rpx;
+  height: 86rpx;
+  padding: 0;
+  border: 4rpx solid #ff3121;
+  border-radius: 8rpx;
+  background: linear-gradient(#fff31b, #ff9900);
+  color: #fff;
+  font-size: 52rpx;
+  line-height: 1.2;
+  text-shadow: 3rpx 3rpx #e32900;
+}
+
+.page-button::after,
+.enter-button::after,
+.back-button::after {
+  border: none;
+}
+
+.page-button[disabled] {
+  opacity: 0.42;
+}
+
+.notice-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 42rpx;
+  padding: 26rpx 20rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.16);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.16);
+  color: #f6f6f6;
+  font-size: 27rpx;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.select-footer {
+  position: absolute;
+  bottom: 52rpx;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 42rpx;
+  box-sizing: border-box;
+}
+
+.back-button {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 42rpx;
+}
+
+.enter-button {
+  width: 360rpx;
+  height: 104rpx;
+  margin: 0;
+  border: 6rpx solid #ff2f20;
+  border-radius: 8rpx;
+  background: linear-gradient(#fff127, #ff9700);
+  color: #fff;
+  font-size: 42rpx;
+  font-weight: 900;
+  text-shadow: 3rpx 3rpx #e32900;
+}
+
+.platform-label {
+  position: absolute;
+  right: 24rpx;
+  bottom: 20rpx;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 18rpx;
+}
+
+@media (min-width: 700px) {
+  .game-root {
+    max-width: 750rpx;
+    margin: 0 auto;
+  }
+}
+
+.character-screen,
+.create-screen {
+  background: radial-gradient(circle at 50% 38%, rgba(15, 96, 149, .32), transparent 36%), linear-gradient(#2a3043, #101321 72%);
+}
+
+.character-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 170rpx;
+  color: #fff1c6;
+  font-size: 72rpx;
+  font-weight: 900;
+  letter-spacing: 8rpx;
+  text-shadow: 4rpx 4rpx #8c0000, -2rpx -2rpx #8c0000;
+}
+
+.header-ornament {
+  width: 180rpx;
+  height: 82rpx;
+  margin: 0 18rpx;
+  border-radius: 50%;
+  background: rgba(245, 245, 230, .5);
+  transform: skewX(28deg);
+}
+
+.character-slots {
+  padding: 24rpx 28rpx 0;
+}
+
+.character-slot {
+  display: flex;
+  align-items: center;
+  height: 190rpx;
+  margin-bottom: 30rpx;
+  padding: 12rpx;
+  border: 8rpx solid #f0df9b;
+  background: linear-gradient(90deg, #72031e, #cc0644 58%, #790b25);
+  box-shadow: 0 0 0 5rpx #6d260e, inset 0 0 25rpx rgba(255, 34, 94, .65);
+}
+
+.character-slot.empty {
+  background: linear-gradient(90deg, #50051b, #a80934 60%, #4c071b);
+}
+
+.slot-portrait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 190rpx;
+  height: 166rpx;
+  border-right: 8rpx solid #d7b466;
+  color: #ff1767;
+  font-size: 110rpx;
+  font-weight: 900;
+  text-shadow: 3rpx 3rpx #ffb000;
+}
+
+.portrait-occupied {
+  background: radial-gradient(circle at 50% 42%, #f3c29d 0 22%, transparent 23%), linear-gradient(135deg, #633314, #d2a64f 40%, #20121d);
+  color: #fff;
+  font-size: 58rpx;
+}
+
+.portrait-empty {
+  background: radial-gradient(circle, #72022e, #3b061d);
+}
+
+.slot-info,
+.empty-info {
+  flex: 1;
+  padding: 0 32rpx;
+}
+
+.slot-name,
+.empty-name {
+  color: #fff;
+  font-size: 48rpx;
+  font-weight: 900;
+  text-shadow: 3rpx 3rpx #111;
+}
+
+.slot-level {
+  position: absolute;
+  right: 64rpx;
+  margin-top: -52rpx;
+  color: #ffe4c2;
+  font-size: 30rpx;
+}
+
+.slot-id {
+  margin-top: 16rpx;
+  color: #fff;
+  font-size: 42rpx;
+}
+
+.empty-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.new-character-button {
+  margin: 0;
+  padding: 0 34rpx;
+  border: 5rpx solid #c7faff;
+  border-radius: 28rpx;
+  background: linear-gradient(#27d9ff, #0085d6);
+  color: #fff;
+  font-size: 30rpx;
+  text-shadow: 2rpx 2rpx #27617e;
+}
+
+.current-server {
+  margin-top: 110rpx;
+  color: #f3d98e;
+  font-size: 42rpx;
+  text-align: center;
+  text-shadow: 3rpx 3rpx #40230b;
+}
+
+.character-footer,
+.create-footer {
+  position: absolute;
+  bottom: 48rpx;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 28rpx;
+  box-sizing: border-box;
+}
+
+.character-back-button {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 42rpx;
+}
+
+.enter-character-button {
+  width: 360rpx;
+  height: 104rpx;
+  margin: 0;
+  border: 6rpx solid #ff2f20;
+  border-radius: 8rpx;
+  background: linear-gradient(#fff127, #ff9700);
+  color: #fff;
+  font-size: 42rpx;
+  font-weight: 900;
+  text-shadow: 3rpx 3rpx #e32900;
+}
+
+.new-character-button::after,
+.enter-character-button::after,
+.character-back-button::after {
+  border: none;
+}
+
+.create-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  margin: 38rpx 28rpx 20rpx;
+  color: #f4dd8d;
+  font-size: 42rpx;
+  text-shadow: 2rpx 2rpx #513d0b;
+}
+
+.gold-line {
+  flex: 1;
+  height: 2rpx;
+  background: linear-gradient(90deg, transparent, #f5dd91);
+}
+
+.profession-row {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 70rpx;
+}
+
+.profession-diamond {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 168rpx;
+  height: 168rpx;
+  border: 8rpx solid #c8aa64;
+  border-radius: 14rpx;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #460919, #9e0b25);
+  box-shadow: inset 0 0 0 5rpx #f9e2a0, 0 0 0 4rpx #4c1a0e;
+}
+
+.profession-diamond text {
+  color: #ffe9ae;
+  font-size: 42rpx;
+  font-weight: 900;
+  text-shadow: 3rpx 3rpx #a10712;
+  transform: rotate(-45deg);
+}
+
+.profession-diamond.profession-scholar { background: linear-gradient(135deg, #034e58, #00a4a3); }
+.profession-diamond.profession-stranger { background: linear-gradient(135deg, #2a116b, #6d16d7); }
+.profession-diamond:not(.active) { opacity: .25; }
+.profession-diamond.active { opacity: 1; transform: rotate(45deg) scale(1.06); }
+
+.portrait-title {
+  margin-top: 64rpx;
+}
+
+.portrait-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22rpx;
+  padding: 0 100rpx;
+}
+
+.portrait-card {
+  position: relative;
+  height: 182rpx;
+  overflow: hidden;
+  border: 6rpx solid #c0cbd3;
+  border-radius: 12rpx;
+  background: #5b0b1d;
+  box-shadow: inset 0 0 0 4rpx #34000d;
+}
+
+.portrait-card.selected {
+  border-color: #ffe18d;
+  box-shadow: 0 0 0 5rpx #8c5d1c, 0 0 24rpx rgba(255, 207, 60, .75);
+}
+
+.portrait-art {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #9d172c, #260416);
+}
+
+.portrait-art::before {
+  content: '';
+  position: absolute;
+  bottom: -32rpx;
+  width: 116rpx;
+  height: 144rpx;
+  border-radius: 50% 50% 38% 38%;
+  background: linear-gradient(135deg, #f7c19e, #ad4b43);
+  box-shadow: 0 -78rpx 0 -24rpx #26111c;
+}
+
+.portrait-art::after {
+  content: '';
+  position: absolute;
+  top: 12rpx;
+  width: 112rpx;
+  height: 74rpx;
+  border-radius: 60% 60% 20% 20%;
+  background: #542039;
+}
+
+.portrait-art text {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 16rpx;
+  color: rgba(255, 239, 202, .9);
+  font-size: 38rpx;
+  font-weight: 900;
+  text-shadow: 2rpx 2rpx #6a041c;
+}
+
+.female-rose { background: linear-gradient(135deg, #a52745, #321023); }
+.female-teal { background: linear-gradient(135deg, #147e78, #142f3f); }
+.female-purple { background: linear-gradient(135deg, #742a9c, #211344); }
+.female-gold { background: linear-gradient(135deg, #b46d2d, #3a161c); }
+.male-red { background: linear-gradient(135deg, #9b2029, #260812); }
+.male-blue { background: linear-gradient(135deg, #315f93, #111d3d); }
+.male-purple { background: linear-gradient(135deg, #684086, #1a122d); }
+.male-brown { background: linear-gradient(135deg, #764326, #211318); }
+.male-gold { background: linear-gradient(135deg, #a56f2c, #251c19); }
+
+.profession-description {
+  margin: 38rpx 48rpx 0;
+  color: #f5f5f5;
+  font-size: 30rpx;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.platform-label {
+  position: absolute;
+  right: 24rpx;
+  bottom: 20rpx;
+  color: rgba(255, 255, 255, .35);
+  font-size: 18rpx;
+}
+
+.game-screen {
+  min-height: 100vh;
+  padding-bottom: 124rpx;
+  box-sizing: border-box;
+  background: radial-gradient(circle at 50% 32%, #17445d 0, #0a1d2e 45%, #06111c 100%);
+  color: #f7f0d5;
   font-size: 28rpx;
-  font-weight: 700;
 }
-
-@media (max-width: 520px) {
-  .page-shell {
-    padding: 28rpx;
-  }
-
-  .hero-card {
-    padding: 48rpx 32rpx;
-  }
-
-  .title {
-    font-size: 58rpx;
-  }
+.game-topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100rpx;
+  overflow: hidden;
+  border-bottom: 4rpx solid #d4a241;
+  background: linear-gradient(90deg, #285b75, #30384e 45%, #285b75);
+}
+.game-scene-preview {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  opacity: .8;
+  background: linear-gradient(#61b0d5 0 38%, #477f7e 39% 60%, #263a3e 61%);
+}
+.scene-roof {
+  position: absolute;
+  bottom: 30rpx;
+  left: 30rpx;
+  width: 180rpx;
+  height: 45rpx;
+  border-radius: 50% 50% 0 0;
+  background: #9d5232;
+}
+.scene-water {
+  position: absolute;
+  right: -40rpx;
+  bottom: 8rpx;
+  width: 220rpx;
+  height: 30rpx;
+  border-radius: 50%;
+  background: #14c5d4;
+}
+.game-location {
+  font-size: 48rpx;
+  font-weight: 900;
+  text-shadow: 3rpx 3rpx #111;
+}
+.recharge-badge {
+  position: absolute;
+  right: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76rpx;
+  height: 76rpx;
+  border: 5rpx solid #e7b74b;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f64a00, #9f0915);
+  color: #ffe88f;
+  font-size: 22rpx;
+  font-weight: 900;
+}
+.game-workspace {
+  display: flex;
+  gap: 8rpx;
+  padding: 8rpx 6rpx 0;
+}
+.player-panel {
+  width: 44%;
+  flex-shrink: 0;
+  padding: 12rpx 8rpx;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #5d260f, #3b1d11 60%, #252316);
+}
+.player-summary {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+.player-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 112rpx;
+  height: 112rpx;
+  border: 8rpx solid #e6b546;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #e6be98 0 23%, transparent 24%), linear-gradient(135deg, #6a2f10, #cda147 50%, #2b1c1b);
+  color: #fff;
+  font-size: 42rpx;
+  font-weight: 900;
+}
+.player-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.player-name {
+  font-size: 34rpx;
+}
+.player-server {
+  color: #f5d9aa;
+  font-size: 22rpx;
+}
+.status-bar {
+  height: 16rpx;
+  margin: 7rpx 0 0 86rpx;
+  border: 3rpx solid #f8d8a6;
+  border-radius: 12rpx;
+  overflow: hidden;
+  background: #29120e;
+}
+.status-bar .bar-fill {
+  height: 100%;
+  width: 80%;
+}
+.status-bar.hp .bar-fill { background: #f22219; }
+.status-bar.mp .bar-fill { width: 68%; background: #1ca7dd; }
+.combat-power {
+  display: flex;
+  justify-content: space-around;
+  margin: 12rpx 0;
+  padding: 8rpx;
+  background: linear-gradient(90deg, #70230b, #a800a1, #561548);
+  color: #ffe400;
+  font-size: 28rpx;
+  font-weight: 900;
+}
+.general-row {
+  display: flex;
+  justify-content: center;
+  gap: 8rpx;
+  margin-bottom: 12rpx;
+}
+.general-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62rpx;
+  height: 62rpx;
+  border: 6rpx solid #b99547;
+  border-radius: 20rpx;
+  background: #24140d;
+  color: #e7d48f;
+  font-size: 30rpx;
+}
+.left-map-card,
+.player-detail-card {
+  min-height: 330rpx;
+  overflow: hidden;
+  border: 5rpx solid #d1a661;
+  border-radius: 12rpx;
+  background: #eee0b4;
+  color: #222;
+}
+.map-title {
+  padding: 8rpx;
+  background: #8a0044;
+  color: #fff;
+  font-size: 32rpx;
+  text-align: center;
+}
+.map-art {
+  position: relative;
+  height: 274rpx;
+  background: linear-gradient(145deg, #91b6a0, #4d8e68 56%, #88ae7e);
+}
+.map-river {
+  position: absolute;
+  top: 52rpx;
+  left: 40rpx;
+  width: 240rpx;
+  height: 52rpx;
+  border: 14rpx solid #d8dfda;
+  border-radius: 50%;
+  transform: rotate(-32deg);
+}
+.map-marker {
+  position: absolute;
+  top: 50rpx;
+  right: 52rpx;
+  color: #d00;
+  font-size: 44rpx;
+}
+.player-detail-card {
+  padding: 18rpx;
+  box-sizing: border-box;
+  color: #53340c;
+  font-size: 26rpx;
+  line-height: 1.75;
+}
+.player-detail-card > view {
+  display: flex;
+  justify-content: space-between;
+}
+.experience {
+  align-items: center;
+  gap: 8rpx;
+}
+.experience-track {
+  flex: 1;
+  height: 16rpx;
+  border: 3rpx solid #9a5f0b;
+  border-radius: 10rpx;
+  background: #6e2f16;
+}
+.experience-fill {
+  width: 28%;
+  height: 100%;
+  border-radius: 10rpx;
+  background: #ffd000;
+}
+.game-panel {
+  flex: 1;
+  min-width: 0;
+}
+.panel-content {
+  position: relative;
+  min-height: 535rpx;
+  overflow: hidden;
+  border: 5rpx solid #cd9c47;
+  border-radius: 8rpx;
+  background: repeating-linear-gradient(0deg, rgba(142, 15, 28, .96) 0 76rpx, rgba(102, 8, 23, .96) 78rpx 80rpx);
+}
+.move-title {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 32rpx 22rpx;
+  border-bottom: 3rpx solid #d4942c;
+  font-size: 34rpx;
+  font-weight: 900;
+}
+.down-arrow {
+  color: #ffae00;
+  font-size: 62rpx;
+  text-shadow: 2rpx 2rpx #111;
+}
+.move-empty {
+  height: 365rpx;
+  background: radial-gradient(circle at 30% 70%, #ff671b 0 1%, transparent 3%), radial-gradient(circle at 63% 60%, #e5d10b 0 1%, transparent 3%);
+}
+.panel-caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 22rpx;
+  border-top: 5rpx solid #155a7c;
+  background: linear-gradient(#0b6b99, #143859);
+  color: #f9dc82;
+  font-size: 46rpx;
+  font-weight: 900;
+  text-align: center;
+}
+.list-content {
+  padding: 20rpx 28rpx 86rpx;
+  box-sizing: border-box;
+}
+.dialog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 94rpx;
+  border-bottom: 2rpx solid rgba(246, 171, 37, .55);
+  font-size: 34rpx;
+}
+.dialog-row button {
+  margin: 0;
+  padding: 8rpx 22rpx;
+  border: 4rpx solid #e8ae2e;
+  border-radius: 18rpx;
+  background: #075cc0;
+  color: #fff;
+  font-size: 26rpx;
+}
+.facility-content,
+.function-content {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4rpx;
+  padding: 18rpx 20rpx 86rpx;
+  box-sizing: border-box;
+}
+.facility-item,
+.function-item {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-height: 88rpx;
+  font-size: 30rpx;
+}
+.facility-icon {
+  color: #ffd347;
+  font-size: 42rpx;
+}
+.function-content {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4rpx 10rpx;
+}
+.function-item {
+  justify-content: center;
+  border: 3rpx solid #b0803c;
+  border-radius: 20rpx;
+  background: rgba(86, 20, 30, .75);
+  font-size: 26rpx;
+}
+.game-tabs {
+  display: flex;
+  gap: 6rpx;
+  padding: 8rpx 4rpx 0;
+}
+.game-tab {
+  flex: 1;
+  margin: 0;
+  padding: 16rpx 0;
+  border: 4rpx solid #09d8f0;
+  border-radius: 8rpx;
+  background: linear-gradient(#157894, #10405b);
+  color: #f4e6c0;
+  font-size: 28rpx;
+  font-weight: 900;
+}
+.game-tab.active {
+  background: linear-gradient(#ec4217, #9d1609);
+  border-color: #ffd14e;
+}
+.game-tab::after,
+.chat-input button::after {
+  border: none;
+}
+.companion-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 4rpx;
+  background: #050505;
+}
+.companion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 66rpx;
+  height: 66rpx;
+  border: 5rpx solid #e9bf67;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #f6c4aa 0 25%, #743a46 26% 54%, #23131f 55%);
+  color: #fff;
+  font-size: 22rpx;
+}
+.more-link {
+  margin-left: auto;
+  padding-right: 8rpx;
+  color: #2619e8;
+  font-size: 32rpx;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  height: 72rpx;
+  background: linear-gradient(90deg, #a17a3e, #3c86a9 45%, #1185a6);
+}
+.shortcut-label {
+  width: 32%;
+  color: #fff4d0;
+  font-size: 29rpx;
+  text-align: center;
+}
+.shortcut-item {
+  flex: 1;
+  color: #fff1d0;
+  font-size: 32rpx;
+  text-align: center;
+}
+.shortcut-item.selected {
+  background: linear-gradient(#ff8d19, #dc2706);
+}
+.chat-list {
+  min-height: 690rpx;
+  padding: 20rpx 12rpx 120rpx;
+  background: repeating-linear-gradient(135deg, #102a3e 0 8rpx, #0d2334 8rpx 16rpx);
+}
+.chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+  margin-bottom: 16rpx;
+  color: #f5f4ef;
+  font-size: 27rpx;
+  line-height: 1.45;
+}
+.chat-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 74rpx;
+  height: 74rpx;
+  border: 4rpx solid #d7bd84;
+  border-radius: 8rpx;
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 900;
+}
+.warrior-mini { background: #8b2817; }
+.blue-mini { background: #1d4f78; }
+.red-mini { background: #983d28; }
+.chat-message > view:last-child {
+  max-width: 82%;
+  padding: 12rpx 18rpx;
+  border: 2rpx solid #356682;
+  border-radius: 12rpx;
+  background: rgba(40, 77, 103, .72);
+}
+.chat-name {
+  color: #f3ef00;
+  font-size: 30rpx;
+}
+.chat-input {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  max-width: 750rpx;
+  margin: 0 auto;
+  padding: 10rpx 6rpx;
+  border-top: 4rpx solid #d5a344;
+  background: #07111c;
+}
+.chat-input button {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.chat-plus,
+.chat-emoji {
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 50%;
+  font-size: 54rpx;
+}
+.chat-plus { color: #777; background: #e3e3e3 !important; }
+.chat-emoji { color: #ddab2a; }
+.chat-field {
+  flex: 1;
+  height: 68rpx;
+  border: 4rpx solid #168cb3;
+  border-radius: 38rpx;
+  background: #142030;
+}
+.send-button {
+  width: 124rpx;
+  height: 68rpx;
+  border: 4rpx solid #ddc27c !important;
+  border-radius: 34rpx;
+  background: #087b7a !important;
+  color: #ffe3a3 !important;
+  font-size: 30rpx;
 }
 </style>
