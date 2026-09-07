@@ -1,0 +1,33 @@
+{
+  "name": "汉土领主",
+  "appid": "__UNI__LORDS_HANLAND",
+  "description": "汉土领主跨端游戏前端",
+  "versionName": "0.1.0",
+  "versionCode": 100,
+  "transformPx": false,
+  "h5": {
+    "title": "汉土领主",
+    "router": {
+      "mode": "hash"
+    }
+  },
+  "mp-weixin": {
+    "appid": "wx0000000000000000",
+    "setting": {
+      "urlCheck": false
+    },
+    "usingComponents": true
+  },
+  "app-plus": {
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "distribute": {
+      "android": {
+        "permissions": [
+          "<uses-permission android:name=\"android.permission.INTERNET\"/>"
+        ]
+      }
+    }
+  }
+}

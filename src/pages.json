@@ -1,0 +1,16 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "汉土领主"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarBackgroundColor": "#111827",
+    "backgroundColor": "#0b1020"
+  }
+}
