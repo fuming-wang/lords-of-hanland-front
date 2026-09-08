@@ -158,6 +158,33 @@ function selectGameTab(tab: GameTab) {
   activeGameTab.value = tab
 }
 
+function openFunctionItem(item: string) {
+  const routes: Record<string, string> = {
+    '状态': '/pages/character/character',
+    '物品': '/pages/items/items',
+    '装备': '/pages/character/character?tab=gear',
+    '帮派': '/pages/rank/rank?tab=guild',
+    '会员': '/pages/member/member',
+    '公告': '/pages/announce/announce',
+    '任务': '/pages/task/task',
+    '好友': '/pages/friend/friend',
+    '擂台': '/pages/arena/arena',
+    '宝库': '/pages/shop/shop',
+    '副将': '/pages/vice/vice',
+    '排行': '/pages/rank/rank',
+    '邮件': '/pages/mail/mail',
+  }
+  if (routes[item]) {
+    uni.navigateTo({ url: routes[item] })
+    return
+  }
+  if (item === '登出') {
+    exitGame()
+    return
+  }
+  uni.showToast({ title: item + ' 尚未开放', icon: 'none' })
+}
+
 function exitGame() {
   // #ifdef APP-PLUS
   const appRuntime = (globalThis as typeof globalThis & {
@@ -248,7 +275,7 @@ function exitGame() {
           <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view class="move-title"><text class="down-arrow">▼</text><text>许昌郊外</text></view><view class="move-empty"></view><view class="panel-caption">移动</view></view>
           <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="item in ['称号使者', '导航使者', '战力挑战']" :key="item" class="dialog-row"><text>{{ item }}</text><button>对话</button></view><view class="panel-caption">人物</view></view>
           <view v-else-if="activeGameTab === 'facility'" class="panel-content facility-content"><view v-for="item in ['医馆', '钱庄', '馆驿', '市场', '广场', '官府', '战场', '梨园']" :key="item" class="facility-item"><text class="facility-icon">✦</text><text>{{ item }}</text></view><view class="panel-caption">设施</view></view>
-          <view v-else class="panel-content function-content"><view v-for="item in ['状态', '物品', '副将', '装备', '排行', '好友', '邮件', '任务', '擂台', '帮派', '训练', '宝库', '公告', '会员', '登出']" :key="item" class="function-item">{{ item }}</view><view class="panel-caption">功能</view></view>
+          <view v-else class="panel-content function-content"><view v-for="item in ['状态', '物品', '副将', '装备', '排行', '好友', '邮件', '任务', '擂台', '帮派', '训练', '宝库', '公告', '会员', '登出']" :key="item" class="function-item" @tap="openFunctionItem(item)">{{ item }}</view><view class="panel-caption">功能</view></view>
         </view>
       </view>
       <view class="game-tabs"><button v-for="tab in gameTabs" :key="tab.key" class="game-tab" :class="{ active: activeGameTab === tab.key }" @tap="selectGameTab(tab.key)">{{ tab.label }}</button></view>

@@ -6,6 +6,97 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "汉土领主"
       }
+    },
+    {
+      "path": "pages/character/character",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "角色信息"
+      }
+    },
+    {
+      "path": "pages/items/items",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "物品"
+      }
+    },
+    {
+      "path": "pages/guild/guild",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "排行榜"
+      }
+    },
+    {
+      "path": "pages/member/member",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "会员"
+      }
+    },
+    {
+      "path": "pages/announce/announce",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "公告"
+      }
+    },
+    {
+      "path": "pages/task/task",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "任务"
+      }
+    },
+    {
+      "path": "pages/friend/friend",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "好友"
+      }
+    },
+    {
+      "path": "pages/arena/arena",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "擂台"
+      }
+    },
+    {
+      "path": "pages/shop/shop",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "购买宝物"
+      }
+    },
+    {
+      "path": "pages/vice/vice",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "副将"
+      }
+    },
+    {
+      "path": "pages/rank/rank",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "排行榜"
+      }
+    },
+    {
+      "path": "pages/mail/mail",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "邮件"
+      }
+    },
+    {
+      "path": "pages/gear/gear",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "装备物品"
+      }
     }
   ],
   "globalStyle": {
