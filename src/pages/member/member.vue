@@ -1,5 +1,23 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { clearSession, getUsername } from '../../services/session'
+import { relaunch } from '../../services/navigation'
+
+const accountName = ref(getUsername())
+
 function goBack() { uni.navigateBack() }
+
+function logout() {
+  uni.showModal({
+    title: '退出登录',
+    content: '确定要退出当前账号吗?',
+    success: (res) => {
+      if (!res.confirm) return
+      clearSession()
+      relaunch('/pages/login/login')
+    },
+  })
+}
 </script>
 
 <template>
@@ -11,7 +29,8 @@ function goBack() { uni.navigateBack() }
     <view class="member-sub">我的会员信息</view>
 
     <view class="member-body">
-      <text class="para">您当前不是会员,立即开通可享受会员尊贵权益</text>
+      <text class="para">当前账号:{{ accountName || '未知' }}</text>
+      <text class="para para-space">您当前不是会员,立即开通可享受会员尊贵权益</text>
       <text class="para para-space">三国会员为您提供:</text>
       <text class="benefit">升级加速,免费自动补满气血,免费赠送将才英才,神兵套装5折优惠券等等专属会员用户权益</text>
 
@@ -20,6 +39,7 @@ function goBack() { uni.navigateBack() }
     </view>
 
     <view class="member-footer">
+      <button class="back-fab logout-btn" @tap="logout">退出登录</button>
       <button class="back-fab" @tap="goBack">返回</button>
     </view>
   </view>
@@ -62,8 +82,9 @@ function goBack() { uni.navigateBack() }
 .action-btn::after { border: none; }
 .arrow { color: #ffd84a; }
 
-.member-footer { position: fixed; right: 0; bottom: 30rpx; left: 0; display: flex; justify-content: flex-end; padding: 0 30rpx; box-sizing: border-box; }
+.member-footer { position: fixed; right: 0; bottom: 30rpx; left: 0; display: flex; gap: 20rpx; justify-content: flex-end; padding: 0 30rpx; box-sizing: border-box; }
 .back-fab { margin: 0; padding: 14rpx 44rpx; border: 4rpx solid #f0c14a; border-radius: 40rpx; background: linear-gradient(#e79b1c, #b0630d); color: #fff7d8; font-size: 32rpx; font-weight: 900; }
 .back-fab::after { border: none; }
+.logout-btn { border-color: #d84a3a; background: linear-gradient(#c0202a, #7a0d16); color: #ffe27a; }
 @media (min-width: 700px) { .member-screen { max-width: 750rpx; margin: 0 auto; } }
 </style>
