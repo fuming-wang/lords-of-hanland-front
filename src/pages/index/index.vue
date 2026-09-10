@@ -1,18 +1,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { getPlatform } from '../../platform'
+import { relaunch } from '../../services/navigation'
+import {
+  MaxRolesPerZone,
+  MaxRoleNameLength,
+  createRole,
+  listRoles,
+  selectRole,
+  translateRoleError,
+  type Role,
+} from '../../services/role'
+import {
+  type ActiveRole,
+  clearSession,
+  getActiveRole,
+  getSelectedZone,
+  isLoggedIn,
+  setActiveRole,
+  setSelectedZone,
+} from '../../services/session'
+import { listZones, translateZoneError, zoneStatusLabel, type Zone } from '../../services/zone'
 
 type Screen = 'splash' | 'menu' | 'server' | 'characters' | 'create' | 'game'
 type ProfessionKey = 'warrior' | 'scholar' | 'stranger'
 type GameTab = 'move' | 'person' | 'facility' | 'function'
-
-interface ServerItem {
-  name: string
-  status: 'online' | 'soon'
-  population: string
-  terrain: string
-  serverType: string
-}
 
 interface Portrait {
   name: string
@@ -22,31 +35,67 @@ interface Portrait {
 
 interface Profession {
   key: ProfessionKey
+  // name 同时是后端职业名（武士 / 文人 / 异人），建角时原样提交。
   name: string
   description: string
   portraits: Portrait[]
 }
 
+// GameRoleView 是游戏主界面需要的角色字段；进入游戏时来自后端角色视图，
+// 冷启动（重新进入页面）时退化为本地保存的角色摘要。
+interface GameRoleView {
+  id: number
+  name: string
+  level: number
+  className: string
+  title: string
+  coordinate: string
+  gold: number
+  silver: number
+  experience: number
+  requiredExperience: number
+  currentHp: number
+  maxHp: number
+  currentSp: number
+  maxSp: number
+  totalAttack: number
+  totalSpeed: number
+}
+
 const screen = ref<Screen>('splash')
-const selectedServer = ref(0)
+const platform = getPlatform()
+
+// 选区页：分区来自公开接口 GET /servers。
+const zones = ref<Zone[]>([])
+const zonesLoading = ref(false)
+const zonesError = ref('')
+const selectedZoneId = ref(0)
 const currentServerPage = ref(1)
+
+// 选角页：角色来自 GET /roles?server_id=。
+const roles = ref<Role[]>([])
+const rolesLoading = ref(false)
+const rolesError = ref('')
+const selectedRoleId = ref(0)
+
+// 建角页。
+const roleName = ref('')
+const creating = ref(false)
+const createError = ref('')
+
+// 游戏内角色：本次进入的完整角色视图，或上次进入的角色摘要。
+const enteredRole = ref<Role | null>(null)
+const storedRole = ref<ActiveRole | null>(null)
+
 const selectedProfession = ref<ProfessionKey>('warrior')
 const selectedPortrait = ref(2)
 const activeGameTab = ref<GameTab>('move')
 const pageSize = 4
-const platform = getPlatform()
 const gameTabs: { key: GameTab; label: string }[] = [
   { key: 'person', label: '人物' },
   { key: 'facility', label: '设施' },
   { key: 'move', label: '移动' },
   { key: 'function', label: '功能' },
-]
-
-const servers: ServerItem[] = [
-  { name: '官渡', serverType: '神将服', status: 'online', population: '人气火爆', terrain: '沃野千里' },
-  { name: '邺城', serverType: '国士服', status: 'online', population: '稳定运行', terrain: '水乡平原' },
-  { name: '江陵', serverType: '猛将服', status: 'online', population: '稳定运行', terrain: '江汉沃土' },
-  { name: '襄阳', serverType: '测试服', status: 'online', population: '测试中', terrain: '山河险固' },
 ]
 
 const professions: Profession[] = [
@@ -91,26 +140,137 @@ const professions: Profession[] = [
   },
 ]
 
-const totalServerPages = computed(() => Math.ceil(servers.length / pageSize))
+const totalServerPages = computed(() => Math.max(1, Math.ceil(zones.value.length / pageSize)))
 const visibleServers = computed(() => {
   const start = (currentServerPage.value - 1) * pageSize
-  return servers.slice(start, start + pageSize)
+  return zones.value.slice(start, start + pageSize)
 })
 const activeProfession = computed(() => professions.find((item) => item.key === selectedProfession.value) ?? professions[0])
 const selectedPortraitData = computed(() => activeProfession.value.portraits[selectedPortrait.value])
 
+// selectedZone：优先取当前分区列表里的记录，冷启动时退回本地保存的分区。
+const selectedZone = computed<Zone | { id: number; name: string; status: string; open: boolean } | null>(() => {
+  const fromList = zones.value.find((zone) => zone.id === selectedZoneId.value)
+  if (fromList) return fromList
+  const remembered = getSelectedZone()
+  if (!remembered) return null
+  return { ...remembered, open: remembered.status === 'open' }
+})
+
+const emptySlots = computed(() => Math.max(0, MaxRolesPerZone - roles.value.length))
+const roleNameLength = computed(() => Array.from(roleName.value.trim()).length)
+
+const gameRole = computed<GameRoleView | null>(() => {
+  const role = enteredRole.value
+  if (role) {
+    return {
+      id: role.id,
+      name: role.name,
+      level: role.level,
+      className: role.class,
+      title: role.title,
+      coordinate: role.coordinate,
+      gold: role.gold,
+      silver: role.silver,
+      experience: role.experience,
+      requiredExperience: role.required_experience,
+      currentHp: role.current_hp,
+      maxHp: role.max_hp,
+      currentSp: role.current_sp,
+      maxSp: role.max_sp,
+      totalAttack: role.total_attack,
+      totalSpeed: role.total_speed,
+    }
+  }
+  const stored = storedRole.value
+  if (!stored) return null
+  return {
+    id: stored.id,
+    name: stored.name,
+    level: stored.level,
+    className: stored.className,
+    title: '',
+    coordinate: '',
+    gold: 0,
+    silver: 0,
+    experience: 0,
+    requiredExperience: 0,
+    currentHp: 0,
+    maxHp: 0,
+    currentSp: 0,
+    maxSp: 0,
+    totalAttack: 0,
+    totalSpeed: 0,
+  }
+})
+const experiencePercent = computed(() => {
+  const role = gameRole.value
+  if (!role || role.requiredExperience <= 0) return 0
+  return Math.min(100, Math.max(0, (role.experience / role.requiredExperience) * 100))
+})
+
+onShow(() => {
+  // 未登录（token 过期被 401 清理）直接回登录页，避免带着空会话请求角色。
+  if (!isLoggedIn()) {
+    relaunch('/pages/login/login')
+    return
+  }
+  storedRole.value = getActiveRole()
+})
+
 function goTo(nextScreen: Screen) {
+  if (nextScreen === 'server') {
+    void loadZones()
+    screen.value = nextScreen
+    return
+  }
+  if (nextScreen === 'characters') {
+    // 没有分区（冷启动/登出后）时先回选区页，避免在空分区上拉角色列表。
+    if (!selectedZone.value) {
+      void loadZones()
+      screen.value = 'server'
+      return
+    }
+    void loadRoles()
+    screen.value = nextScreen
+    return
+  }
   screen.value = nextScreen
+}
+
+// --- 选区（GET /servers）--------------------------------------------------
+
+async function loadZones() {
+  zonesLoading.value = true
+  zonesError.value = ''
+  try {
+    zones.value = await listZones()
+    currentServerPage.value = 1
+    const remembered = getSelectedZone()
+    const preferred =
+      zones.value.find((zone) => zone.id === remembered?.id) ||
+      zones.value.find((zone) => zone.open) ||
+      zones.value[0]
+    selectedZoneId.value = preferred ? preferred.id : 0
+    if (zones.value.length === 0) {
+      zonesError.value = '当前没有开放的分区，请留意公告'
+    }
+  } catch (err) {
+    zonesError.value = translateZoneError(err instanceof Error ? err.message : '')
+  } finally {
+    zonesLoading.value = false
+  }
 }
 
 function chooseServer(index: number) {
   const actualIndex = (currentServerPage.value - 1) * pageSize + index
-  const server = servers[actualIndex]
-  if (!server || server.status === 'soon') {
-    uni.showToast({ title: '该分区即将开放', icon: 'none' })
+  const zone = zones.value[actualIndex]
+  if (!zone) return
+  if (!zone.open) {
+    uni.showToast({ title: `该分区${zoneStatusLabel(zone.status)}`, icon: 'none' })
     return
   }
-  selectedServer.value = actualIndex
+  selectedZoneId.value = zone.id
 }
 
 function changeServerPage(step: number) {
@@ -119,16 +279,57 @@ function changeServerPage(step: number) {
 }
 
 function enterServer() {
-  if (servers[selectedServer.value].status === 'soon') {
-    uni.showToast({ title: '请选择已开放分区', icon: 'none' })
+  const zone = selectedZone.value
+  if (!zone) {
+    uni.showToast({ title: '请选择要进入的分区', icon: 'none' })
     return
   }
+  if (!zone.open) {
+    uni.showToast({ title: `该分区${zoneStatusLabel(zone.status)}，请稍后再试`, icon: 'none' })
+    return
+  }
+  setSelectedZone({ id: zone.id, name: zone.name, status: zone.status })
   goTo('characters')
 }
 
+// --- 选区内的角色（GET /roles?server_id=）--------------------------------
+
+async function loadRoles() {
+  const zone = selectedZone.value
+  // 没有分区时不发请求：goTo 已经把界面切回选区页了。
+  if (!zone) return
+  rolesLoading.value = true
+  rolesError.value = ''
+  try {
+    roles.value = await listRoles(zone.id)
+    selectedRoleId.value = roles.value[0]?.id ?? 0
+  } catch (err) {
+    rolesError.value = translateRoleError(err instanceof Error ? err.message : '')
+    roles.value = []
+    selectedRoleId.value = 0
+  } finally {
+    rolesLoading.value = false
+  }
+}
+
+function chooseRole(roleId: number) {
+  selectedRoleId.value = roleId
+}
+
+function switchZone() {
+  enteredRole.value = null
+  goTo('server')
+}
+
 function openCreateCharacter() {
+  if (roles.value.length >= MaxRolesPerZone) {
+    uni.showToast({ title: `每个分区最多 ${MaxRolesPerZone} 个角色`, icon: 'none' })
+    return
+  }
   selectedProfession.value = 'warrior'
   selectedPortrait.value = 2
+  roleName.value = ''
+  createError.value = ''
   goTo('create')
 }
 
@@ -141,12 +342,81 @@ function choosePortrait(index: number) {
   selectedPortrait.value = index
 }
 
-function enterExistingCharacter() {
-  openGame()
+// enterExistingCharacter 进入所选角色：POST /roles/{id}/select 由后端校验
+// 归属与分区状态，通过后把角色摘要写入本地会话。
+async function enterExistingCharacter() {
+  if (!selectedRoleId.value) {
+    uni.showToast({ title: '请先选择角色', icon: 'none' })
+    return
+  }
+  rolesLoading.value = true
+  try {
+    const role = await selectRole(selectedRoleId.value)
+    enteredRole.value = role
+    rememberRole(role)
+    openGame()
+  } catch (err) {
+    const message = translateRoleError(err instanceof Error ? err.message : '')
+    rolesError.value = message
+    uni.showToast({ title: message, icon: 'none' })
+  } finally {
+    rolesLoading.value = false
+  }
 }
 
-function registerCharacter() {
-  openGame()
+// registerCharacter 建角：POST /roles（带 server_id），随后直接进入该角色。
+async function registerCharacter() {
+  const zone = selectedZone.value
+  if (!zone) {
+    uni.showToast({ title: '请先选择分区', icon: 'none' })
+    goTo('server')
+    return
+  }
+  const name = roleName.value.trim()
+  if (!name) {
+    createError.value = '请输入角色名'
+    return
+  }
+  if (Array.from(name).length > MaxRoleNameLength) {
+    createError.value = `角色名最多 ${MaxRoleNameLength} 个字`
+    return
+  }
+  if (!zone.open) {
+    createError.value = `该分区${zoneStatusLabel(zone.status)}，暂时无法创建角色`
+    return
+  }
+  const portrait = selectedPortraitData.value
+  creating.value = true
+  createError.value = ''
+  try {
+    const role = await createRole({
+      serverId: zone.id,
+      name,
+      className: activeProfession.value.name,
+      sex: portrait.style.startsWith('female') ? '女' : '男',
+      image: portrait.style,
+    })
+    enteredRole.value = role
+    rememberRole(role)
+    roles.value = [...roles.value, role]
+    openGame()
+  } catch (err) {
+    createError.value = translateRoleError(err instanceof Error ? err.message : '')
+  } finally {
+    creating.value = false
+  }
+}
+
+// rememberRole 保存进入游戏的角色摘要，供游戏内其它页面读取。
+function rememberRole(role: Role) {
+  setActiveRole({
+    id: role.id,
+    name: role.name,
+    level: role.level,
+    className: role.class,
+    serverId: role.server_id,
+  })
+  storedRole.value = getActiveRole()
 }
 
 function openGame() {
@@ -185,16 +455,19 @@ function openFunctionItem(item: string) {
   uni.showToast({ title: item + ' 尚未开放', icon: 'none' })
 }
 
+// exitGame 登出：清除会话（含所选分区与角色）并回到登录页。
 function exitGame() {
   // #ifdef APP-PLUS
   const appRuntime = (globalThis as typeof globalThis & {
     plus?: { runtime?: { quit?: () => void } }
   }).plus?.runtime
-  appRuntime?.quit?.()
+  if (appRuntime?.quit) {
+    appRuntime.quit()
+    return
+  }
   // #endif
-  // #ifndef APP-PLUS
-  uni.showToast({ title: '当前平台不支持直接退出', icon: 'none' })
-  // #endif
+  clearSession()
+  relaunch('/pages/login/login')
 }
 </script>
 
@@ -225,36 +498,51 @@ function exitGame() {
 
     <view v-else-if="screen === 'server'" class="screen select-screen">
       <view class="select-header"><view class="ornament ornament-left"></view><text>选择分区</text><view class="ornament ornament-right"></view></view>
-      <view class="server-list">
-        <view v-for="(server, index) in visibleServers" :key="server.name" class="server-item" :class="{ selected: selectedServer === (currentServerPage - 1) * pageSize + index, disabled: server.status === 'soon' }" @tap="chooseServer(index)">
-          <view class="server-name">{{ server.name }}（{{ server.serverType }}）</view>
-          <view class="server-meta"><text>{{ server.terrain }}</text><text>{{ server.population }}</text></view>
-          <view class="server-light" :class="server.status"></view>
+      <view v-if="zonesLoading" class="select-state"><text class="select-state-title">正在读取分区…</text></view>
+      <view v-else-if="zonesError" class="select-state">
+        <text class="select-state-title">{{ zonesError }}</text>
+        <button class="select-retry-button" @tap="loadZones">重新加载</button>
+      </view>
+      <template v-else>
+        <view class="server-list">
+          <view v-for="(server, index) in visibleServers" :key="server.id" class="server-item" :class="{ selected: selectedZoneId === server.id, disabled: !server.open }" @tap="chooseServer(index)">
+            <view class="server-name">{{ server.name }}</view>
+            <view class="server-meta"><text>{{ zoneStatusLabel(server.status) }}</text><text>第 {{ server.id }} 区</text></view>
+            <view class="server-light" :class="server.open ? 'online' : 'closed'"></view>
+          </view>
         </view>
-      </view>
-      <view class="page-switcher">
-        <button class="page-button" :disabled="currentServerPage === 1" @tap="changeServerPage(-1)">▲</button>
-        <text>第 {{ currentServerPage }} / {{ totalServerPages }} 页</text>
-        <button class="page-button" :disabled="currentServerPage === totalServerPages" @tap="changeServerPage(1)">▼</button>
-      </view>
+        <view class="page-switcher">
+          <button class="page-button" :disabled="currentServerPage === 1" @tap="changeServerPage(-1)">▲</button>
+          <text>第 {{ currentServerPage }} / {{ totalServerPages }} 页</text>
+          <button class="page-button" :disabled="currentServerPage === totalServerPages" @tap="changeServerPage(1)">▼</button>
+        </view>
+      </template>
       <view class="notice-copy"><text>游戏永久免费，游戏内道具自愿购买</text><text>文网游备字（2012）M-RPG002号</text></view>
       <view class="select-footer"><button class="back-button" @tap="goTo('menu')">返回</button><button class="enter-button" @tap="enterServer">进入游戏</button></view>
     </view>
 
     <view v-else-if="screen === 'characters'" class="screen character-screen">
       <view class="character-header"><view class="header-ornament"></view><text>选择角色</text><view class="header-ornament"></view></view>
-      <view class="character-slots">
-        <view class="character-slot occupied">
-          <view class="slot-portrait portrait-occupied"><text>哈</text></view>
-          <view class="slot-info"><view class="slot-name">哈基米</view><view class="slot-level">21级武士</view><view class="slot-id">ID:10081</view></view>
+      <view v-if="rolesLoading" class="select-state"><text class="select-state-title">正在读取角色…</text></view>
+      <template v-else>
+        <view v-if="rolesError" class="role-error"><text>{{ rolesError }}</text></view>
+        <view class="character-slots">
+          <view v-for="role in roles" :key="role.id" class="character-slot occupied" :class="{ selected: selectedRoleId === role.id }" @tap="chooseRole(role.id)">
+            <view class="slot-portrait portrait-occupied"><text>{{ role.name.slice(0, 1) }}</text></view>
+            <view class="slot-info">
+              <view class="slot-name">{{ role.name }}</view>
+              <view class="slot-level">{{ role.level }}级{{ role.class }}</view>
+              <view class="slot-id">ID:{{ role.id }}</view>
+            </view>
+          </view>
+          <view v-for="slot in emptySlots" :key="'empty-' + slot" class="character-slot empty" @tap="openCreateCharacter">
+            <view class="slot-portrait portrait-empty">?</view>
+            <view class="empty-info"><view class="empty-name">空</view><button class="new-character-button" @tap.stop="openCreateCharacter">新建角色</button></view>
+          </view>
         </view>
-        <view v-for="slot in 2" :key="slot" class="character-slot empty" @tap="openCreateCharacter">
-          <view class="slot-portrait portrait-empty">?</view>
-          <view class="empty-info"><view class="empty-name">空</view><button class="new-character-button" @tap.stop="openCreateCharacter">新建角色</button></view>
-        </view>
-      </view>
-      <view class="current-server">&lt; {{ servers[selectedServer].name }}（{{ servers[selectedServer].serverType }}） &gt;</view>
-      <view class="character-footer"><button class="enter-character-button" @tap="enterExistingCharacter">进入游戏</button><button class="character-back-button" @tap="goTo('server')">返回</button></view>
+      </template>
+      <view class="current-server" @tap="switchZone">&lt; {{ selectedZone ? selectedZone.name : '未选择分区' }}{{ selectedZone ? '（' + zoneStatusLabel(selectedZone.status) + '）' : '' }} · 切换 &gt;</view>
+      <view class="character-footer"><button class="enter-character-button" :disabled="!selectedRoleId || rolesLoading" @tap="enterExistingCharacter">进入游戏</button><button class="character-back-button" @tap="goTo('server')">返回</button></view>
     </view>
 
     <view v-else-if="screen === 'game'" class="screen game-screen">
@@ -264,12 +552,12 @@ function exitGame() {
       </view>
       <view class="game-workspace">
         <view class="player-panel">
-          <view class="player-summary"><view class="player-avatar">哈</view><view class="player-name-block"><text class="player-name">哈基米</text><text class="player-server">[{{ servers[selectedServer].name }}:10081]</text></view></view>
+          <view class="player-summary"><view class="player-avatar">{{ gameRole ? gameRole.name.slice(0, 1) : '游' }}</view><view class="player-name-block"><text class="player-name">{{ gameRole ? gameRole.name : '未选择角色' }}</text><text class="player-server">[{{ selectedZone ? selectedZone.name : '未选区' }}:{{ gameRole ? gameRole.id : '—' }}]</text></view></view>
           <view class="status-bar hp"><view class="bar-fill"></view></view><view class="status-bar mp"><view class="bar-fill"></view></view>
-          <view class="combat-power"><text>战斗力</text><text>4202</text></view>
+          <view class="combat-power"><text>攻击</text><text>{{ gameRole ? gameRole.totalAttack : 0 }}</text></view>
           <view class="general-row"><view v-for="index in 3" :key="index" class="general-slot">将</view></view>
-          <view v-if="activeGameTab === 'move'" class="left-map-card"><view class="map-title">许昌</view><view class="map-art"><view class="map-river"></view><view class="map-marker">◆</view></view></view>
-          <view v-else class="player-detail-card"><view><text>职业:</text><text>武士</text></view><view><text>等级:</text><text>21级</text></view><view class="experience"><text>经验值:</text><view class="experience-track"><view class="experience-fill"></view></view></view><view><text>金:</text><text>0</text></view><view><text>银:</text><text>0</text></view><view><text>绑定银:</text><text>26715</text></view></view>
+          <view v-if="activeGameTab === 'move'" class="left-map-card"><view class="map-title">{{ gameRole && gameRole.coordinate ? gameRole.coordinate : '许昌' }}</view><view class="map-art"><view class="map-river"></view><view class="map-marker">◆</view></view></view>
+          <view v-else class="player-detail-card"><view><text>职业:</text><text>{{ gameRole ? gameRole.className : '—' }}</text></view><view><text>等级:</text><text>{{ gameRole ? gameRole.level : 0 }}级</text></view><view class="experience"><text>经验值:</text><view class="experience-track"><view class="experience-fill" :style="{ width: experiencePercent + '%' }"></view></view></view><view><text>金:</text><text>{{ gameRole ? gameRole.gold : 0 }}</text></view><view><text>银:</text><text>{{ gameRole ? gameRole.silver : 0 }}</text></view><view><text>速度:</text><text>{{ gameRole ? gameRole.totalSpeed : 0 }}</text></view></view>
         </view>
         <view class="game-panel">
           <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view class="move-title"><text class="down-arrow">▼</text><text>许昌郊外</text></view><view class="move-empty"></view><view class="panel-caption">移动</view></view>
@@ -291,6 +579,18 @@ function exitGame() {
       <view class="chat-input"><button class="chat-plus">＋</button><button class="chat-emoji">●</button><view class="chat-field"></view><button class="send-button">发送</button></view>
     </view>    <view v-else class="screen create-screen">
       <view class="character-header"><view class="header-ornament"></view><text>创建角色</text><view class="header-ornament"></view></view>
+      <view class="create-title"><view class="gold-line"></view><text>角色名</text><view class="gold-line"></view></view>
+      <view class="role-name-field">
+        <input
+          v-model="roleName"
+          class="role-name-input"
+          type="text"
+          :maxlength="6"
+          placeholder="最多 6 个字，分区内唯一"
+          placeholder-style="color:#7a735c"
+        />
+        <text class="role-name-count">{{ roleNameLength }}/6</text>
+      </view>
       <view class="create-title"><view class="gold-line"></view><text>选择职业</text><view class="gold-line"></view></view>
       <view class="profession-row">
         <view v-for="profession in professions" :key="profession.key" class="profession-diamond" :class="['profession-' + profession.key, { active: selectedProfession === profession.key }]" @tap="chooseProfession(profession.key)"><text>{{ profession.name }}</text></view>
@@ -303,8 +603,9 @@ function exitGame() {
         </view>
       </view>
       <view class="profession-description">{{ activeProfession.description }}</view>
-      <view class="create-footer"><button class="enter-character-button" @tap="registerCharacter">进入游戏</button><button class="character-back-button" @tap="goTo('characters')">返回</button></view>
-      <view class="platform-label">{{ platform }}</view>
+      <text v-if="createError" class="create-error-text">{{ createError }}</text>
+      <view class="create-footer"><button class="enter-character-button" :disabled="creating" @tap="registerCharacter">{{ creating ? '创建中…' : '进入游戏' }}</button><button class="character-back-button" @tap="goTo('characters')">返回</button></view>
+      <view class="platform-label">{{ platform }} · {{ selectedZone ? selectedZone.name : '' }}</view>
     </view>
   </view>
 </template>
@@ -611,6 +912,54 @@ function exitGame() {
   box-shadow: none;
 }
 
+.server-light.closed {
+  background: #9b9b9b;
+  box-shadow: none;
+}
+
+/* 选区/选角页的加载与错误状态 */
+.select-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28rpx;
+  padding: 120rpx 40rpx;
+}
+
+.select-state-title {
+  color: #f6f0d8;
+  font-size: 34rpx;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.select-retry-button {
+  margin: 0;
+  padding: 0 46rpx;
+  border: 5rpx solid #ffd76a;
+  border-radius: 10rpx;
+  background: linear-gradient(#e79b1c, #b0630d);
+  color: #fff7d8;
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.select-retry-button::after {
+  border: none;
+}
+
+.role-error {
+  margin: 0 28rpx 16rpx;
+  padding: 18rpx 24rpx;
+  border: 4rpx solid #ff6a5a;
+  border-radius: 8rpx;
+  background: rgba(120, 12, 12, .55);
+  color: #ffd9d3;
+  font-size: 26rpx;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .page-switcher {
   display: flex;
   align-items: center;
@@ -749,6 +1098,52 @@ function exitGame() {
 
 .character-slot.empty {
   background: linear-gradient(90deg, #50051b, #a80934 60%, #4c071b);
+}
+
+/* 当前选中的角色（进入游戏的目标） */
+.character-slot.selected {
+  border-color: #fff3b0;
+  box-shadow: 0 0 0 5rpx #ffd76a, 0 0 32rpx rgba(255, 215, 106, .55);
+}
+
+.enter-character-button[disabled] {
+  opacity: .55;
+}
+
+/* 建角页的角色名输入 */
+.role-name-field {
+  position: relative;
+  width: 640rpx;
+  margin: 0 auto;
+}
+
+.role-name-input {
+  width: 100%;
+  height: 92rpx;
+  padding: 0 130rpx 0 28rpx;
+  border: 6rpx solid #f0df9b;
+  border-radius: 10rpx;
+  background: #2a0a14;
+  color: #fff7d8;
+  font-size: 38rpx;
+  box-sizing: border-box;
+}
+
+.role-name-count {
+  position: absolute;
+  top: 28rpx;
+  right: 28rpx;
+  color: #e9c98a;
+  font-size: 26rpx;
+}
+
+.create-error-text {
+  display: block;
+  margin: 24rpx 24rpx 0;
+  color: #ff8b7d;
+  font-size: 28rpx;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .slot-portrait {
