@@ -473,7 +473,7 @@ function exitGame() {
 
 <template>
   <view class="game-root">
-    <view v-if="screen === 'splash'" :key="screen" class="screen splash-screen" @tap="goTo('menu')">
+    <view v-if="screen === 'splash'" class="screen splash-screen" @tap="goTo('menu')">
       <view class="splash-art">
         <view class="sun-glow"></view><view class="mountain mountain-back"></view><view class="mountain mountain-front"></view>
         <view class="warrior"><view class="warrior-hair"></view><view class="warrior-face"></view><view class="warrior-armor"></view><view class="warrior-ribbon"></view></view>
@@ -483,7 +483,7 @@ function exitGame() {
       <view class="tap-hint"><view class="tap-hint-line"></view><text>点击进入</text><view class="tap-hint-line"></view></view>
     </view>
 
-    <view v-else-if="screen === 'menu'" :key="screen" class="screen splash-screen menu-screen">
+    <view v-else-if="screen === 'menu'" class="screen splash-screen menu-screen">
       <view class="splash-art">
         <view class="sun-glow"></view><view class="mountain mountain-back"></view><view class="mountain mountain-front"></view>
         <view class="warrior"><view class="warrior-hair"></view><view class="warrior-face"></view><view class="warrior-armor"></view><view class="warrior-ribbon"></view></view>
@@ -496,7 +496,7 @@ function exitGame() {
       </view>
     </view>
 
-    <view v-else-if="screen === 'server'" :key="screen" class="screen select-screen">
+    <view v-else-if="screen === 'server'" class="screen select-screen">
       <view class="select-header"><view class="ornament ornament-left"></view><text>选择分区</text><view class="ornament ornament-right"></view></view>
       <view v-if="zonesLoading" class="select-state"><text class="select-state-title">正在读取分区…</text></view>
       <view v-else-if="zonesError" class="select-state">
@@ -521,7 +521,7 @@ function exitGame() {
       <view class="select-footer"><button class="back-button" @tap="goTo('menu')">返回</button><button class="enter-button" @tap="enterServer">进入游戏</button></view>
     </view>
 
-    <view v-else-if="screen === 'characters'" :key="screen" class="screen character-screen">
+    <view v-else-if="screen === 'characters'" class="screen character-screen">
       <view class="character-header"><view class="header-ornament"></view><text>选择角色</text><view class="header-ornament"></view></view>
       <view v-if="rolesLoading" class="select-state"><text class="select-state-title">正在读取角色…</text></view>
       <template v-else>
@@ -555,7 +555,7 @@ function exitGame() {
       <view class="character-footer"><button class="enter-character-button" :disabled="!selectedRoleId || rolesLoading" @tap="enterExistingCharacter">进入游戏</button><button class="character-back-button" @tap="goTo('server')">返回</button></view>
     </view>
 
-    <view v-else-if="screen === 'game'" :key="screen" class="screen game-screen">
+    <view v-else-if="screen === 'game'" class="screen game-screen">
       <view class="game-topbar">
         <view class="game-scene-preview"><view class="scene-roof"></view><view class="scene-water"></view></view>
         <text class="game-location">许昌</text><view class="recharge-badge">首充</view>
@@ -587,7 +587,7 @@ function exitGame() {
         <view class="chat-message"><view class="chat-avatar red-mini">又</view><view><text class="chat-name">又欠</text><text> 明天给我备好三个体 🤔</text></view></view>
       </view>
       <view class="chat-input"><button class="chat-plus">＋</button><button class="chat-emoji">●</button><view class="chat-field"></view><button class="send-button">发送</button></view>
-    </view>    <view v-else :key="screen" class="screen create-screen">
+    </view>    <view v-else class="screen create-screen">
       <view class="character-header"><view class="header-ornament"></view><text>创建角色</text><view class="header-ornament"></view></view>
       <view class="create-title"><view class="gold-line"></view><text>角色名</text><view class="gold-line"></view></view>
       <view class="role-name-field">
