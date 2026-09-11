@@ -90,9 +90,34 @@
 4. 真正接入战斗、地图等重度游戏画面时，建议将渲染模块封装为独立组件，并评估 WebGL、Canvas 和小程序基础库版本差异。
 5. 发布前分别在目标端验证登录、支付、分享、资源加载、横竖屏和返回键行为。
 
+## 进入游戏的流程（分区 / 角色）
+
+后端是**单库多区**：所有分区共用同一套地图与数值配置，账号全局唯一，角色按
+`server_id` 归属分区，角色名在分区内唯一、跨区可重名，每账号每分区最多 3 个角色。
+因此客户端必须"先选区、再选角"：
+
+1. 登录/注册（`POST /accounts`、`POST /auth/login`）→ 进入 `pages/index/index` 主菜单；
+2. 「进入游戏」→ 选区页：`GET /servers`（**公开接口，无需 token**）拉取分区列表，
+   每项显示分区名与状态；只有 `open` 的分区可点，「维护中 / 已关闭」置灰并提示原因；
+3. 「进入游戏」→ 选角页：`GET /roles?server_id=<所选分区>` 拉取该账号在此分区的角色
+   （最多 3 个槽位，空槽「新建角色」）；
+4. 选角 → `POST /roles/{id}/select`（后端校验归属与分区状态，维护/关闭返回 409）→ 进入游戏；
+5. 建角 → `POST /roles {"server_id","name","class","sex","image"}`：角色名 ≤6 字、
+   职业取 `武士`/`文人`/`异人`、头像样式写入 `image`、性别由头像推导；建好后自动进入角色。
+
+所选分区与当前角色保存在本地会话（`src/services/session.ts`）：
+`lords_hanland_zone`（分区）与 `lords_hanland_role`（角色摘要），登出时一并清除；
+选区页进入时会自动选中上次进入的分区（若仍开放）。
+
+分区相关接口封装在 `src/services/zone.ts`，角色相关接口在 `src/services/role.ts`，
+两处的错误文案映射（`translateZoneError` / `translateRoleError`）覆盖了后端的
+`server: server is not open`、`role: name already taken`、`role: account role limit exceeded` 等。
+
 ## 下一步建议
 
 - 在 .env.* 中配置后端 API 地址。
 - 用真实接口替换 src/services/game.ts 中的演示请求。
 - 在 src/manifest.json 中补充 App 图标、包名和 Android 权限。
 - 在微信开发者工具中补充 AppID，并配置业务域名、上传域名和合法域名。
+- 游戏内页面（角色/物品/副将/邮件等）目前多为静态演示，接入真实数据时可统一读取
+  `getSelectedZone()` 与 `getActiveRole()` 得到当前分区与角色。
