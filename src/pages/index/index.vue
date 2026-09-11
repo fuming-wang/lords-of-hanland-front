@@ -841,14 +841,14 @@ function exitGame() {
   justify-content: center;
   height: 170rpx;
   color: #fff7dc;
-  font-size: 72rpx;
+  font-size: 50rpx;
   font-weight: 900;
   text-shadow: 4rpx 4rpx #8c0000, -2rpx -2rpx #8c0000;
 }
 
 .ornament {
-  width: 180rpx;
-  height: 82rpx;
+  width: 130rpx;
+  height: 60rpx;
   margin: 0 18rpx;
   border-radius: 50%;
   background: rgba(245, 245, 230, 0.7);
@@ -863,10 +863,10 @@ function exitGame() {
   position: relative;
   display: flex;
   align-items: center;
-  height: 112rpx;
+  height: 96rpx;
   margin-bottom: 22rpx;
-  padding: 0 42rpx;
-  border: 8rpx solid #cbd0d5;
+  padding: 0 32rpx;
+  border: 6rpx solid #cbd0d5;
   border-radius: 4rpx;
   background: linear-gradient(90deg, #17231c 0 70%, #66765d 100%);
   box-shadow: 0 0 0 4rpx #080808, inset 0 0 0 3rpx #000;
@@ -883,10 +883,13 @@ function exitGame() {
 }
 
 .server-name {
-  width: 210rpx;
-  font-size: 48rpx;
+  width: 260rpx;
+  font-size: 34rpx;
   font-weight: 900;
   text-shadow: 3rpx 3rpx #101010;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .server-meta {
@@ -967,18 +970,18 @@ function exitGame() {
   gap: 34rpx;
   margin-top: 30rpx;
   color: #f4f4f4;
-  font-size: 34rpx;
+  font-size: 26rpx;
 }
 
 .page-button {
-  width: 190rpx;
-  height: 86rpx;
+  width: 140rpx;
+  height: 66rpx;
   padding: 0;
   border: 4rpx solid #ff3121;
   border-radius: 8rpx;
   background: linear-gradient(#fff31b, #ff9900);
   color: #fff;
-  font-size: 52rpx;
+  font-size: 34rpx;
   line-height: 1.2;
   text-shadow: 3rpx 3rpx #e32900;
 }
@@ -1002,7 +1005,7 @@ function exitGame() {
   border-top: 1rpx solid rgba(255, 255, 255, 0.16);
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.16);
   color: #f6f6f6;
-  font-size: 27rpx;
+  font-size: 23rpx;
   line-height: 1.7;
   text-align: center;
 }
@@ -1024,18 +1027,18 @@ function exitGame() {
   padding: 0;
   background: transparent;
   color: #fff;
-  font-size: 42rpx;
+  font-size: 32rpx;
 }
 
 .enter-button {
-  width: 360rpx;
-  height: 104rpx;
+  width: 300rpx;
+  height: 88rpx;
   margin: 0;
   border: 6rpx solid #ff2f20;
   border-radius: 8rpx;
   background: linear-gradient(#fff127, #ff9700);
   color: #fff;
-  font-size: 42rpx;
+  font-size: 34rpx;
   font-weight: 900;
   text-shadow: 3rpx 3rpx #e32900;
 }

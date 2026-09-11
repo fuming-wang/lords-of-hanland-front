@@ -18,10 +18,14 @@ interface ZoneListResult {
 // listZones 调用公开接口 GET /servers 拉取分区列表（无需登录）。
 export async function listZones(): Promise<Zone[]> {
   const result = await request<ZoneListResult>('/servers')
-  return (result.servers || []).map((zone) => ({
-    ...zone,
-    open: typeof zone.open === 'boolean' ? zone.open : zone.status === 'open',
-  }))
+  return (result.servers || [])
+    .map((zone) => ({
+      ...zone,
+      open: typeof zone.open === 'boolean' ? zone.open : zone.status === 'open',
+    }))
+    // 按区服 id 升序：玩家认知里的「第 N 区」= server.id，不能依赖后端的
+    // sort_order（实测会排成 2、3、1、4），保证第一区在最上、最后一区在最下。
+    .sort((a, b) => a.id - b.id)
 }
 
 // zoneStatusLabel 把后端状态翻译成玩家可读文案。
