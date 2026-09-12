@@ -122,6 +122,24 @@ export async function listNpcs(roleId: number): Promise<Npc[]> {
   return data.npcs ?? []
 }
 
+// NpcBattleResult 是一场 NPC 群战斗的结算结果（含战后角色快照）。
+export interface NpcBattleResult {
+  group: string
+  won: boolean
+  reason: string
+  rounds: number
+  exp_reward: number
+  gold_drop: number
+  silver_drop: number
+  role: Role
+}
+
+// fightNpc 调用 POST /roles/{id}/npcs/{npcId}/battle 对怪物型 NPC
+// （如石猴子野怪群）发起一场服务端裁决的 PVE 战斗。
+export async function fightNpc(roleId: number, npcId: number): Promise<NpcBattleResult> {
+  return request<NpcBattleResult>(`/roles/${roleId}/npcs/${npcId}/battle`, { method: 'POST' })
+}
+
 const ROLE_ERRORS: Record<string, string> = {
   'role: name must not be empty': '请输入角色名',
   'role: name must be at most 6 characters': '角色名最多 6 个字',

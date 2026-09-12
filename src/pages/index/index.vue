@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { relaunch } from '../../services/navigation'
 import { ApiError } from '../../services/http'
-import { getRole, listMoves, listNpcs, moveRole, translateRoleError } from '../../services/role'
+import { fightNpc, getRole, listMoves, listNpcs, moveRole, translateRoleError } from '../../services/role'
 import type { MoveOption, Npc, Role } from '../../services/role'
 import {
   clearSession,
@@ -215,6 +215,33 @@ function talkToNpc(npc: Npc) {
   uni.showToast({ title: text ? `${npc.name}：${text}` : `${npc.name} 没有话说`, icon: 'none' })
 }
 
+// fightingNpc 防止战斗请求期间重复点击。
+const fightingNpc = ref(false)
+
+// battleNpc 点击怪物型 NPC 的战斗按钮:发起一场服务端裁决的 PVE 战斗,
+// 结算弹窗展示胜负与奖励,战后角色快照回写本地会话。
+async function battleNpc(npc: Npc) {
+  const active = storedRole.value
+  if (!active || fightingNpc.value) return
+  fightingNpc.value = true
+  try {
+    const result = await fightNpc(active.id, npc.id)
+    setActiveRoleView(result.role)
+    void refreshRole()
+    const summary = result.won
+      ? `战斗胜利！历经${result.rounds}回合\n经验 +${result.exp_reward}  银两 +${result.silver_drop}`
+      : result.reason === 'timeout'
+        ? `战至${result.rounds}回合未分胜负，撤退保存了性命`
+        : `第${result.rounds}回合战败，气血所剩无几`
+    uni.showModal({ title: `${result.group} · ${result.won ? '胜利' : '战败'}`, content: summary, showCancel: false })
+  } catch (err) {
+    const message = err instanceof ApiError ? translateRoleError(err.message) : '战斗发起失败，请稍后再试'
+    uni.showToast({ title: message, icon: 'none' })
+  } finally {
+    fightingNpc.value = false
+  }
+}
+
 function selectGameTab(tab: GameTab) {
   activeGameTab.value = tab
   // 每次切回移动页时重新查询,保证列表跟随角色当前位置。
@@ -284,7 +311,7 @@ function exitGame() {
         </view>
         <view class="game-panel">
           <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view v-for="move in moves" :key="move.direction + move.name" class="move-option" @tap="chooseMove(move)"><text class="move-arrow" :class="move.direction">{{ moveArrows[move.direction] }}</text><text class="move-name">{{ move.name }}</text></view><view v-if="moves.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有可移动的地点</text></view><view class="panel-caption">移动</view></view>
-          <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="npc in npcs" :key="npc.id" class="dialog-row"><text>{{ npc.name }}</text><button @tap="talkToNpc(npc)">对话</button></view><view v-if="npcs.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有人物</text></view><view class="panel-caption">人物</view></view>
+          <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="npc in npcs" :key="npc.id" class="dialog-row"><text>{{ npc.name }}</text><view class="dialog-actions"><button v-if="npc.type === 'monster'" :disabled="fightingNpc" @tap="battleNpc(npc)">战斗</button><button @tap="talkToNpc(npc)">对话</button></view></view><view v-if="npcs.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有人物</text></view><view class="panel-caption">人物</view></view>
           <view v-else-if="activeGameTab === 'facility'" class="panel-content facility-content"><view v-for="item in ['医馆', '钱庄', '馆驿', '市场', '广场', '官府', '战场', '梨园']" :key="item" class="facility-item"><text class="facility-icon">✦</text><text>{{ item }}</text></view><view class="panel-caption">设施</view></view>
           <view v-else class="panel-content function-content"><view v-for="item in ['状态', '物品', '副将', '装备', '排行', '好友', '邮件', '任务', '擂台', '帮派', '训练', '宝库', '公告', '会员', '登出']" :key="item" class="function-item" @tap="openFunctionItem(item)">{{ item }}</view><view class="panel-caption">功能</view></view>
         </view>
@@ -617,6 +644,15 @@ function exitGame() {
   background: #075cc0;
   color: #fff;
   font-size: 26rpx;
+}
+/* 同一行放「战斗+对话」两个按钮时的容器。 */
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.dialog-actions button[disabled] {
+  opacity: .6;
 }
 .facility-content,
 .function-content {
