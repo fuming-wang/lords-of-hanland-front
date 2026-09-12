@@ -98,6 +98,12 @@ export async function listMoves(roleId: number): Promise<MoveOption[]> {
   }
 }
 
+// moveRole 调用 POST /roles/{id}/move 移动到指定地点。目标必须是地图上
+// 的活动点位或城市（城外没有设施的野地后端按未知位置拒绝，返回 400）。
+export async function moveRole(roleId: number, name: string): Promise<Role> {
+  return request<Role>(`/roles/${roleId}/move`, { method: 'POST', data: { name } })
+}
+
 const ROLE_ERRORS: Record<string, string> = {
   'role: name must not be empty': '请输入角色名',
   'role: name must be at most 6 characters': '角色名最多 6 个字',
@@ -113,5 +119,7 @@ const ROLE_ERRORS: Record<string, string> = {
 // translateRoleError 把角色相关错误转成玩家可读提示。
 export function translateRoleError(message: string): string {
   if (!message) return '操作失败，请稍后再试'
+  // 移动目标带具体地名（"game: unknown current location: X"），按前缀匹配。
+  if (message.startsWith('game: unknown current location')) return '那里没有设施，无法前往'
   return ROLE_ERRORS[message] ?? message
 }
