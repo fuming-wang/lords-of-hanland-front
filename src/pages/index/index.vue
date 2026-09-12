@@ -4,7 +4,8 @@ import { onShow } from '@dcloudio/uni-app'
 import { relaunch } from '../../services/navigation'
 import { ApiError } from '../../services/http'
 import { fightNpc, getRole, listMoves, listNpcs, moveRole, translateRoleError } from '../../services/role'
-import type { MoveOption, Npc, Role } from '../../services/role'
+import type { MoveOption, Npc, NpcBattleResult, Role } from '../../services/role'
+import BattlePlayback from '../../components/BattlePlayback.vue'
 import {
   clearSession,
   getActiveRole,
@@ -218,8 +219,17 @@ function talkToNpc(npc: Npc) {
 // fightingNpc 防止战斗请求期间重复点击。
 const fightingNpc = ref(false)
 
+// battlePlayback 持有最近一场战斗的完整结果, 由回放器逐动作演出;
+// 回放结束(点击屏幕)后清空并回到主界面。
+const battlePlayback = ref<NpcBattleResult | null>(null)
+
+function onPlaybackFinish() {
+  battlePlayback.value = null
+  void refreshRole()
+}
+
 // battleNpc 点击怪物型 NPC 的战斗按钮:发起一场服务端裁决的 PVE 战斗,
-// 结算弹窗展示胜负与奖励,战后角色快照回写本地会话。
+// 战后角色快照即时回写, 再进入战斗回放逐回合演出。
 async function battleNpc(npc: Npc) {
   const active = storedRole.value
   if (!active || fightingNpc.value) return
@@ -227,13 +237,7 @@ async function battleNpc(npc: Npc) {
   try {
     const result = await fightNpc(active.id, npc.id)
     setActiveRoleView(result.role)
-    void refreshRole()
-    const summary = result.won
-      ? `战斗胜利！历经${result.rounds}回合\n经验 +${result.exp_reward}  银两 +${result.silver_drop}`
-      : result.reason === 'timeout'
-        ? `战至${result.rounds}回合未分胜负，撤退保存了性命`
-        : `第${result.rounds}回合战败，气血所剩无几`
-    uni.showModal({ title: `${result.group} · ${result.won ? '胜利' : '战败'}`, content: summary, showCancel: false })
+    battlePlayback.value = result
   } catch (err) {
     const message = err instanceof ApiError ? translateRoleError(err.message) : '战斗发起失败，请稍后再试'
     uni.showToast({ title: message, icon: 'none' })
@@ -328,6 +332,7 @@ function exitGame() {
       </view>
       <view class="chat-input"><button class="chat-plus">＋</button><button class="chat-emoji">●</button><view class="chat-field"></view><button class="send-button">发送</button></view>
     </view>
+    <BattlePlayback v-if="battlePlayback" :battle="battlePlayback" @finish="onPlaybackFinish" />
   </view>
 </template>
 

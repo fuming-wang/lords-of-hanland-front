@@ -122,12 +122,37 @@ export async function listNpcs(roleId: number): Promise<Npc[]> {
   return data.npcs ?? []
 }
 
-// NpcBattleResult 是一场 NPC 群战斗的结算结果（含战后角色快照）。
+// BattleFighterView 是战斗名册里的一个参战单位（回放站位用）。
+export interface BattleFighterView {
+  id: string
+  name: string
+  side: 'player' | 'monster'
+  level: number
+  max_hp: number
+  speed: number
+}
+
+// BattleRoundLog 是战斗流水中的一条动作: 谁对谁做了什么、结算如何。
+export interface BattleRoundLog {
+  round: number
+  actor_id: string
+  target_id: string
+  kind: 'miss' | 'normal' | 'skill' | 'crit' | 'deadly' | 'heal'
+  skill_name?: string
+  damage: number
+  actor_hp: number
+  target_hp: number
+}
+
+// NpcBattleResult 是一场 NPC 群战斗的结算结果（含战斗名册、逐动作
+// 流水与战后角色快照），供回放器逐条演出。
 export interface NpcBattleResult {
   group: string
   won: boolean
   reason: string
   rounds: number
+  roster: BattleFighterView[]
+  log: BattleRoundLog[]
   exp_reward: number
   gold_drop: number
   silver_drop: number
