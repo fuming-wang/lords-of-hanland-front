@@ -2,8 +2,8 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { relaunch } from '../../services/navigation'
-import { getRole } from '../../services/role'
-import type { Role } from '../../services/role'
+import { getRole, listMoves } from '../../services/role'
+import type { MoveOption, Role } from '../../services/role'
 import {
   clearSession,
   getActiveRole,
@@ -26,7 +26,6 @@ interface GameRoleView {
   level: number
   className: string
   title: string
-  coordinate: string
   cur_location: string | null
   gold: number
   silver: number
@@ -43,6 +42,15 @@ interface GameRoleView {
 const roleView = ref<Role | null>(null)
 const storedRole = ref<ActiveRole | null>(null)
 const activeGameTab = ref<GameTab>('move')
+// moves 是从当前位置可以移动到的地点(后端按上北、左西、右东、下南返回)。
+const moves = ref<MoveOption[]>([])
+// moveArrows 把方向映射成指示箭头:上北下南、左西右东。
+const moveArrows: Record<MoveOption['direction'], string> = {
+  north: '↑',
+  south: '↓',
+  west: '←',
+  east: '→',
+}
 const gameTabs: { key: GameTab; label: string }[] = [
   { key: 'person', label: '人物' },
   { key: 'facility', label: '设施' },
@@ -61,7 +69,6 @@ const gameRole = computed<GameRoleView | null>(() => {
       level: role.level,
       className: role.class,
       title: role.title,
-      coordinate: role.coordinate,
       cur_location: role.cur_location ?? null,
       gold: role.gold,
       silver: role.silver,
@@ -83,7 +90,6 @@ const gameRole = computed<GameRoleView | null>(() => {
     level: stored.level,
     className: stored.className,
     title: '',
-    coordinate: '',
     cur_location: null,
     gold: 0,
     silver: 0,
@@ -103,11 +109,11 @@ const experiencePercent = computed(() => {
   return Math.min(100, Math.max(0, (role.experience / role.requiredExperience) * 100))
 })
 
-// locationName 是顶栏/地图卡的地址:优先用后端的当前位置,退化到坐标字段。
+// locationName 是顶栏/地图卡的地址:后端的当前位置。
 const locationName = computed(() => {
   const role = gameRole.value
   if (!role) return '未知之地'
-  return role.cur_location || role.coordinate || '未知之地'
+  return role.cur_location || '未知之地'
 })
 const hpPercent = computed(() => {
   const role = gameRole.value
@@ -131,7 +137,19 @@ onShow(() => {
   roleView.value = getActiveRoleView()
   storedRole.value = getActiveRole()
   void refreshRole()
+  void refreshMoves()
 })
+
+// refreshMoves 查询当前位置可以移动到的地点;失败时保留已有列表,不阻塞渲染。
+async function refreshMoves() {
+  const active = storedRole.value
+  if (!active) return
+  try {
+    moves.value = await listMoves(active.id)
+  } catch {
+    // 网络抖动等沿用上次结果;未定位/未知位置时后端返回 400,listMoves 已转为空列表。
+  }
+}
 
 // refreshRole 从后端拉取当前角色的完整视图,并同步回本地会话缓存;
 // 请求失败时保留缓存数据,不阻塞主界面渲染。
@@ -157,6 +175,8 @@ async function refreshRole() {
 
 function selectGameTab(tab: GameTab) {
   activeGameTab.value = tab
+  // 每次切回移动页时重新查询,保证列表跟随角色当前位置。
+  if (tab === 'move') void refreshMoves()
 }
 
 function openFunctionItem(item: string) {
@@ -219,7 +239,7 @@ function exitGame() {
           <view v-else class="player-detail-card"><view><text>职业:</text><text>{{ gameRole ? gameRole.className : '—' }}</text></view><view><text>等级:</text><text>{{ gameRole ? gameRole.level : 0 }}级</text></view><view class="experience"><text>经验值:</text><view class="experience-track"><view class="experience-fill" :style="{ width: experiencePercent + '%' }"></view></view><text class="experience-value">{{ gameRole ? gameRole.experience : 0 }}/{{ gameRole ? gameRole.requiredExperience : 0 }}</text></view><view><text>金:</text><text>{{ gameRole ? gameRole.gold : 0 }}</text></view><view><text>银:</text><text>{{ gameRole ? gameRole.silver : 0 }}</text></view><view><text>血量:</text><text>{{ gameRole ? gameRole.currentHp : 0 }}/{{ gameRole ? gameRole.maxHp : 0 }}</text></view><view><text>精力:</text><text>{{ gameRole ? gameRole.currentSp : 0 }}/{{ gameRole ? gameRole.maxSp : 0 }}</text></view><view><text>速度:</text><text>{{ gameRole ? gameRole.totalSpeed : 0 }}</text></view></view>
         </view>
         <view class="game-panel">
-          <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view class="move-title"><text class="down-arrow">▼</text><text>{{ locationName }}郊外</text></view><view class="move-empty"></view><view class="panel-caption">移动</view></view>
+          <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view v-for="move in moves" :key="move.direction + move.name" class="move-option"><text class="move-arrow" :class="move.direction">{{ moveArrows[move.direction] }}</text><text class="move-name">{{ move.name }}</text></view><view v-if="moves.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有可移动的地点</text></view><view class="panel-caption">移动</view></view>
           <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="item in ['称号使者', '导航使者', '战力挑战']" :key="item" class="dialog-row"><text>{{ item }}</text><button>对话</button></view><view class="panel-caption">人物</view></view>
           <view v-else-if="activeGameTab === 'facility'" class="panel-content facility-content"><view v-for="item in ['医馆', '钱庄', '馆驿', '市场', '广场', '官府', '战场', '梨园']" :key="item" class="facility-item"><text class="facility-icon">✦</text><text>{{ item }}</text></view><view class="panel-caption">设施</view></view>
           <view v-else class="panel-content function-content"><view v-for="item in ['状态', '物品', '副将', '装备', '排行', '好友', '邮件', '任务', '擂台', '帮派', '训练', '宝库', '公告', '会员', '登出']" :key="item" class="function-item" @tap="openFunctionItem(item)">{{ item }}</view><view class="panel-caption">功能</view></view>
@@ -486,23 +506,39 @@ function exitGame() {
   border-radius: 8rpx;
   background: repeating-linear-gradient(0deg, rgba(142, 15, 28, .96) 0 76rpx, rgba(102, 8, 23, .96) 78rpx 80rpx);
 }
-.move-title {
+.move-content {
+  padding: 14rpx 20rpx 86rpx;
+  box-sizing: border-box;
+}
+.move-option {
   display: flex;
   align-items: center;
-  gap: 20rpx;
-  padding: 32rpx 22rpx;
-  border-bottom: 3rpx solid #d4942c;
+  gap: 18rpx;
+  min-height: 88rpx;
+  border-bottom: 2rpx solid rgba(246, 171, 37, .55);
   font-size: 34rpx;
-  font-weight: 900;
 }
-.down-arrow {
+.move-arrow {
+  display: inline-block;
+  width: 56rpx;
   color: #ffae00;
-  font-size: 62rpx;
+  font-size: 46rpx;
+  font-weight: 900;
+  text-align: center;
   text-shadow: 2rpx 2rpx #111;
 }
+.move-name {
+  color: #fff;
+}
 .move-empty {
-  height: 365rpx;
-  background: radial-gradient(circle at 30% 70%, #ff671b 0 1%, transparent 3%), radial-gradient(circle at 63% 60%, #e5d10b 0 1%, transparent 3%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300rpx;
+}
+.move-empty-text {
+  color: rgba(255, 255, 255, .75);
+  font-size: 30rpx;
 }
 .panel-caption {
   position: absolute;

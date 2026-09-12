@@ -1,4 +1,4 @@
-import { request } from './http'
+import { request, ApiError } from './http'
 
 // Role 是后端返回的角色视图（role 表 + 16 项抗性）。server_id 标明角色
 // 所属分区：角色名只在分区内唯一，因此列表/建角都必须带 server_id。
@@ -11,7 +11,6 @@ export interface Role {
   sex: string
   image: string
   title: string
-  coordinate: string
   // cur_location 是后端的当前位置(活动点位名或世界图城市名);未定位时为 null。
   cur_location?: string | null
   level: number
@@ -78,6 +77,25 @@ export async function getRole(roleId: number): Promise<Role> {
 // 分区状态：分区维护/关闭时返回 409）。
 export async function selectRole(roleId: number): Promise<Role> {
   return request<Role>(`/roles/${roleId}/select`, { method: 'POST' })
+}
+
+// MoveOption 是当前位置一个方向上可移动到的地名。direction 为
+// north/south/west/east；后端按上北、左西、右东、下南的顺序返回。
+export interface MoveOption {
+  direction: 'north' | 'south' | 'west' | 'east'
+  name: string
+}
+
+// listMoves 调用 GET /roles/{id}/moves 查询从当前位置可以移动到的地点
+// （活动点位用四向邻居，城市用世界图四向城市链接）。未定位时后端返回
+// 400，这里转成空列表由界面提示。
+export async function listMoves(roleId: number): Promise<MoveOption[]> {
+  try {
+    return await request<MoveOption[]>(`/roles/${roleId}/moves`)
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 400) return []
+    throw error
+  }
 }
 
 const ROLE_ERRORS: Record<string, string> = {
