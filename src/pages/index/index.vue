@@ -3,9 +3,8 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { relaunch } from '../../services/navigation'
 import { ApiError } from '../../services/http'
-import { fightNpc, getRole, listMoves, listNpcs, moveRole, translateRoleError } from '../../services/role'
-import type { MoveOption, Npc, NpcBattleResult, Role } from '../../services/role'
-import BattlePlayback from '../../components/BattlePlayback.vue'
+import { getRole, listMoves, listNpcs, moveRole, translateRoleError } from '../../services/role'
+import type { MoveOption, Npc, Role } from '../../services/role'
 import {
   clearSession,
   getActiveRole,
@@ -216,34 +215,12 @@ function talkToNpc(npc: Npc) {
   uni.showToast({ title: text ? `${npc.name}：${text}` : `${npc.name} 没有话说`, icon: 'none' })
 }
 
-// fightingNpc 防止战斗请求期间重复点击。
-const fightingNpc = ref(false)
-
-// battlePlayback 持有最近一场战斗的完整结果, 由回放器逐动作演出;
-// 回放结束(点击屏幕)后清空并回到主界面。
-const battlePlayback = ref<NpcBattleResult | null>(null)
-
-function onPlaybackFinish() {
-  battlePlayback.value = null
-  void refreshRole()
-}
-
-// battleNpc 点击怪物型 NPC 的战斗按钮:发起一场服务端裁决的 PVE 战斗,
-// 战后角色快照即时回写, 再进入战斗回放逐回合演出。
-async function battleNpc(npc: Npc) {
+// battleNpc 点击怪物型 NPC 的战斗按钮:进入回合制手动战斗页
+// (pages/battle), 由玩家逐回合下达指令, 服务器结算。
+function battleNpc(npc: Npc) {
   const active = storedRole.value
-  if (!active || fightingNpc.value) return
-  fightingNpc.value = true
-  try {
-    const result = await fightNpc(active.id, npc.id)
-    setActiveRoleView(result.role)
-    battlePlayback.value = result
-  } catch (err) {
-    const message = err instanceof ApiError ? translateRoleError(err.message) : '战斗发起失败，请稍后再试'
-    uni.showToast({ title: message, icon: 'none' })
-  } finally {
-    fightingNpc.value = false
-  }
+  if (!active) return
+  uni.navigateTo({ url: `/pages/battle/battle?npc_id=${npc.id}` })
 }
 
 function selectGameTab(tab: GameTab) {
@@ -315,7 +292,7 @@ function exitGame() {
         </view>
         <view class="game-panel">
           <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view v-for="move in moves" :key="move.direction + move.name" class="move-option" @tap="chooseMove(move)"><text class="move-arrow" :class="move.direction">{{ moveArrows[move.direction] }}</text><text class="move-name">{{ move.name }}</text></view><view v-if="moves.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有可移动的地点</text></view><view class="panel-caption">移动</view></view>
-          <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="npc in npcs" :key="npc.id" class="dialog-row"><text>{{ npc.name }}</text><view class="dialog-actions"><button v-if="npc.type === 'monster'" :disabled="fightingNpc" @tap="battleNpc(npc)">战斗</button><button @tap="talkToNpc(npc)">对话</button></view></view><view v-if="npcs.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有人物</text></view><view class="panel-caption">人物</view></view>
+          <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="npc in npcs" :key="npc.id" class="dialog-row"><text>{{ npc.name }}</text><view class="dialog-actions"><button v-if="npc.type === 'monster'" @tap="battleNpc(npc)">战斗</button><button @tap="talkToNpc(npc)">对话</button></view></view><view v-if="npcs.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有人物</text></view><view class="panel-caption">人物</view></view>
           <view v-else-if="activeGameTab === 'facility'" class="panel-content facility-content"><view v-for="item in ['医馆', '钱庄', '馆驿', '市场', '广场', '官府', '战场', '梨园']" :key="item" class="facility-item"><text class="facility-icon">✦</text><text>{{ item }}</text></view><view class="panel-caption">设施</view></view>
           <view v-else class="panel-content function-content"><view v-for="item in ['状态', '物品', '副将', '装备', '排行', '好友', '邮件', '任务', '擂台', '帮派', '训练', '宝库', '公告', '会员', '登出']" :key="item" class="function-item" @tap="openFunctionItem(item)">{{ item }}</view><view class="panel-caption">功能</view></view>
         </view>
@@ -332,7 +309,6 @@ function exitGame() {
       </view>
       <view class="chat-input"><button class="chat-plus">＋</button><button class="chat-emoji">●</button><view class="chat-field"></view><button class="send-button">发送</button></view>
     </view>
-    <BattlePlayback v-if="battlePlayback" :battle="battlePlayback" @finish="onPlaybackFinish" />
   </view>
 </template>
 

@@ -125,6 +125,27 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "装备物品"
       }
+    },
+    {
+      "path": "pages/battle/battle",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "战斗"
+      }
+    },
+    {
+      "path": "pages/win/win",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "胜利"
+      }
+    },
+    {
+      "path": "pages/lost/lost",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "败北"
+      }
     }
   ],
   "globalStyle": {
