@@ -1,10 +1,31 @@
 {
   "pages": [
     {
-      "path": "pages/login/login",
+      "path": "pages/login",
       "style": {
         "navigationStyle": "custom",
         "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/start",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "汉土领主"
+      }
+    },
+    {
+      "path": "pages/server",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "选择分区"
+      }
+    },
+    {
+      "path": "pages/role",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "选择角色"
       }
     },
     {

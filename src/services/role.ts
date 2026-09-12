@@ -12,6 +12,8 @@ export interface Role {
   image: string
   title: string
   coordinate: string
+  // cur_location 是后端的当前位置(活动点位名或世界图城市名);未定位时为 null。
+  cur_location?: string | null
   level: number
   experience: number
   required_experience: number
@@ -64,6 +66,12 @@ export async function createRole(input: CreateRoleInput): Promise<Role> {
       image: input.image,
     },
   })
+}
+
+// getRole 调用 GET /roles/{id} 拉取角色的完整视图(后端校验归属,不校验
+// 分区状态)。游戏主界面每次显示时用它刷新金银/经验/血量/精力等实时数据。
+export async function getRole(roleId: number): Promise<Role> {
+  return request<Role>(`/roles/${roleId}`)
 }
 
 // selectRole 调用 POST /roles/{id}/select 进入指定角色（后端会校验归属与

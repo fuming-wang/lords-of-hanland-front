@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { login, register, translateAuthError } from '../../services/auth'
-import { isLoggedIn } from '../../services/session'
-import { relaunch } from '../../services/navigation'
+import { login, register, translateAuthError } from '../services/auth'
+import { isLoggedIn } from '../services/session'
+import { relaunch } from '../services/navigation'
 
 type Mode = 'login' | 'register'
 
@@ -15,9 +15,9 @@ const errorMessage = ref('')
 const submitting = ref(false)
 
 onShow(() => {
-  // 已登录(例如从 401 重定向回来前 token 已被清除)则直接进入游戏。
+  // 已登录(例如从 401 重定向回来前 token 已被清除)则直接进入启动页。
   if (isLoggedIn()) {
-    relaunch('/pages/index/index')
+    relaunch('/pages/start')
   }
 })
 
@@ -58,7 +58,7 @@ async function submit() {
     } else {
       await login(name, password.value)
     }
-    relaunch('/pages/index/index')
+    relaunch('/pages/start')
   } catch (err) {
     errorMessage.value = translateAuthError(err instanceof Error ? err.message : '')
   } finally {

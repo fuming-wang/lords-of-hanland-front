@@ -43,7 +43,7 @@ export async function request<T>(path: string, options: Omit<UniApp.RequestOptio
     if (response.statusCode === 401 && token) {
       // 已登录但 token 失效(过期或账号被封禁):清除会话并回登录页。
       clearSession()
-      relaunch('/pages/login/login')
+      relaunch('/pages/login')
     }
     throw new ApiError(errorMessage(response.data, response.statusCode), response.statusCode)
   }

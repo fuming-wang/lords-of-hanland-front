@@ -1,10 +1,14 @@
 // 会话存储:登录成功后保存 token 与用户名;选区后保存所选分区,进入游戏后
 // 保存当前角色。登出或 401 时全部清除。
 // 独立于 auth.ts/http.ts,避免模块循环依赖。
+// Role 以 import type 引入:类型在编译期擦除,不会产生运行时循环依赖。
+import type { Role } from './role'
+
 const TOKEN_KEY = 'lords_hanland_token'
 const USERNAME_KEY = 'lords_hanland_username'
 const ZONE_KEY = 'lords_hanland_zone'
 const ROLE_KEY = 'lords_hanland_role'
+const ROLE_VIEW_KEY = 'lords_hanland_role_view'
 
 // SelectedZone 是玩家当前选中的分区(选区页写入,游戏内各处读取)。
 export interface SelectedZone {
@@ -84,6 +88,21 @@ export function setActiveRole(role: ActiveRole): void {
   writeJSON(ROLE_KEY, role)
 }
 
+// setActiveRoleView 保存进入游戏时的完整角色视图,供游戏页(独立路由)
+// 直接渲染完整属性;冷启动时同样可以恢复,不会退化成零值摘要。
+export function setActiveRoleView(role: Role): void {
+  writeJSON(ROLE_VIEW_KEY, role)
+}
+
+export function getActiveRoleView(): Role | null {
+  const role = readJSON<Role>(ROLE_VIEW_KEY)
+  return role && typeof role.id === 'number' && role.id > 0 ? role : null
+}
+
+export function clearActiveRoleView(): void {
+  uni.removeStorageSync(ROLE_VIEW_KEY)
+}
+
 export function clearActiveRole(): void {
   uni.removeStorageSync(ROLE_KEY)
 }
@@ -94,6 +113,7 @@ export function clearSession(): void {
   // 登出后不再保留分区与角色选择:重新登录需要重新选区。
   uni.removeStorageSync(ZONE_KEY)
   uni.removeStorageSync(ROLE_KEY)
+  uni.removeStorageSync(ROLE_VIEW_KEY)
 }
 
 export function isLoggedIn(): boolean {

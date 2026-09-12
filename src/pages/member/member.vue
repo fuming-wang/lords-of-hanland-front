@@ -14,7 +14,7 @@ function logout() {
     success: (res) => {
       if (!res.confirm) return
       clearSession()
-      relaunch('/pages/login/login')
+      relaunch('/pages/login')
     },
   })
 }
