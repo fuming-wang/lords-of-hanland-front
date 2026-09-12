@@ -3,8 +3,8 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { relaunch } from '../../services/navigation'
 import { ApiError } from '../../services/http'
-import { getRole, listMoves, moveRole, translateRoleError } from '../../services/role'
-import type { MoveOption, Role } from '../../services/role'
+import { getRole, listMoves, listNpcs, moveRole, translateRoleError } from '../../services/role'
+import type { MoveOption, Npc, Role } from '../../services/role'
 import {
   clearSession,
   getActiveRole,
@@ -52,6 +52,8 @@ const moveArrows: Record<MoveOption['direction'], string> = {
   west: '←',
   east: '→',
 }
+// npcs 是当前位置的 NPC 列表（后端按角色所在地点返回），「人物」标签展示。
+const npcs = ref<Npc[]>([])
 const gameTabs: { key: GameTab; label: string }[] = [
   { key: 'person', label: '人物' },
   { key: 'facility', label: '设施' },
@@ -139,6 +141,7 @@ onShow(() => {
   storedRole.value = getActiveRole()
   void refreshRole()
   void refreshMoves()
+  void refreshNpcs()
 })
 
 // refreshMoves 查询当前位置可以移动到的地点;失败时保留已有列表,不阻塞渲染。
@@ -153,7 +156,7 @@ async function chooseMove(move: MoveOption) {
   try {
     await moveRole(active.id, move.name)
     uni.showToast({ title: `已移动到${move.name}`, icon: 'none' })
-    await Promise.all([refreshRole(), refreshMoves()])
+    await Promise.all([refreshRole(), refreshMoves(), refreshNpcs()])
   } catch (error) {
     const message = error instanceof ApiError ? translateRoleError(error.message) : '移动失败，请稍后再试'
     uni.showToast({ title: message, icon: 'none' })
@@ -195,10 +198,29 @@ async function refreshRole() {
   }
 }
 
+// refreshNpcs 查询当前位置的 NPC 列表;失败时保留上次结果,不阻塞渲染。
+async function refreshNpcs() {
+  const active = storedRole.value
+  if (!active) return
+  try {
+    npcs.value = await listNpcs(active.id)
+  } catch {
+    // 网络抖动等沿用上次结果;未定位时后端返回空列表,界面显示占位文案。
+  }
+}
+
+// talkToNpc 点击 NPC 的对话按钮:优先展示对话文本,没有则展示简介。
+function talkToNpc(npc: Npc) {
+  const text = npc.dialog || npc.description
+  uni.showToast({ title: text ? `${npc.name}：${text}` : `${npc.name} 没有话说`, icon: 'none' })
+}
+
 function selectGameTab(tab: GameTab) {
   activeGameTab.value = tab
   // 每次切回移动页时重新查询,保证列表跟随角色当前位置。
   if (tab === 'move') void refreshMoves()
+  // 人物页签同样跟随位置,切回时重新拉取 NPC 列表。
+  if (tab === 'person') void refreshNpcs()
 }
 
 function openFunctionItem(item: string) {
@@ -262,7 +284,7 @@ function exitGame() {
         </view>
         <view class="game-panel">
           <view v-if="activeGameTab === 'move'" class="panel-content move-content"><view v-for="move in moves" :key="move.direction + move.name" class="move-option" @tap="chooseMove(move)"><text class="move-arrow" :class="move.direction">{{ moveArrows[move.direction] }}</text><text class="move-name">{{ move.name }}</text></view><view v-if="moves.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有可移动的地点</text></view><view class="panel-caption">移动</view></view>
-          <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="item in ['称号使者', '导航使者', '战力挑战']" :key="item" class="dialog-row"><text>{{ item }}</text><button>对话</button></view><view class="panel-caption">人物</view></view>
+          <view v-else-if="activeGameTab === 'person'" class="panel-content list-content"><view v-for="npc in npcs" :key="npc.id" class="dialog-row"><text>{{ npc.name }}</text><button @tap="talkToNpc(npc)">对话</button></view><view v-if="npcs.length === 0" class="move-empty"><text class="move-empty-text">当前位置没有人物</text></view><view class="panel-caption">人物</view></view>
           <view v-else-if="activeGameTab === 'facility'" class="panel-content facility-content"><view v-for="item in ['医馆', '钱庄', '馆驿', '市场', '广场', '官府', '战场', '梨园']" :key="item" class="facility-item"><text class="facility-icon">✦</text><text>{{ item }}</text></view><view class="panel-caption">设施</view></view>
           <view v-else class="panel-content function-content"><view v-for="item in ['状态', '物品', '副将', '装备', '排行', '好友', '邮件', '任务', '擂台', '帮派', '训练', '宝库', '公告', '会员', '登出']" :key="item" class="function-item" @tap="openFunctionItem(item)">{{ item }}</view><view class="panel-caption">功能</view></view>
         </view>

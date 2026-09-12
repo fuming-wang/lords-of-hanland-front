@@ -104,6 +104,24 @@ export async function moveRole(roleId: number, name: string): Promise<Role> {
   return request<Role>(`/roles/${roleId}/move`, { method: 'POST', data: { name } })
 }
 
+// Npc 是当前位置一个 NPC 的玩家视图：名称、类型与对话/简介文本。
+export interface Npc {
+  id: number
+  name: string
+  type: string
+  img: string | null
+  description: string | null
+  dialog: string | null
+  quest_id: number | null
+}
+
+// listNpcs 调用 GET /roles/{id}/npcs 查询角色当前位置的 NPC 列表
+// （游戏页「人物」标签的数据来源）。角色尚未定位时后端返回空列表。
+export async function listNpcs(roleId: number): Promise<Npc[]> {
+  const data = await request<{ npcs: Npc[] }>(`/roles/${roleId}/npcs`)
+  return data.npcs ?? []
+}
+
 const ROLE_ERRORS: Record<string, string> = {
   'role: name must not be empty': '请输入角色名',
   'role: name must be at most 6 characters': '角色名最多 6 个字',
